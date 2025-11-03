@@ -222,6 +222,20 @@ void ChannelWrapper::ClearCachedAttributes() {
  * ...
  *****************************************************************************/
 
+// For other methods of secure credential entry
+//void ChannelWrapper::InsertCredentials(const nsCString& authField,
+//                                       const nsCString& authValue) {
+//  nsresult rv = NS_ERROR_UNEXPECTED;
+//  if (nsCOMPtr<nsIHttpChannel> chan = MaybeHttpChannel()) {
+//    rv = chan->InsertCredentials(authField, authValue);
+//  }
+//}
+//
+//void ChannelWrapper::SecureCredentialsInserted() {
+//  nsresult rv = NS_ERROR_UNEXPECTED;
+//  rv = chan->SecureCredentialsInserted();
+//}
+
 void ChannelWrapper::Cancel(uint32_t aResult, uint32_t aReason,
                             ErrorResult& aRv) {
   nsresult rv = NS_ERROR_UNEXPECTED;

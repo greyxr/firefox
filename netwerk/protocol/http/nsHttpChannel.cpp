@@ -9753,6 +9753,20 @@ nsHttpChannel::OnStopRequest(nsIRequest* request, nsresult status) {
 
     // at this point, we're done with the transaction
     mTransactionTimings = mTransaction->Timings();
+
+    double milliseconds = 0.0;
+    milliseconds = (mOnStopRequestStartTime - mTransactionTimings.requestStart).ToMilliseconds();
+
+    nsCString uriSpec;
+    if (mURI) {
+      mURI->GetSpec(uriSpec);
+    }
+
+    if (request == mTransactionPump) {  // Only network requests
+      LOG(("ANALYTICS: nsHttpChannel::OnStopRequest completed in %.3f ms [this=%p] [channelId=%llu] URL=%s\n",
+           milliseconds, this, mChannelId, uriSpec.get()));
+    }
+
     mTransaction = nullptr;
     mTransactionPump = nullptr;
 

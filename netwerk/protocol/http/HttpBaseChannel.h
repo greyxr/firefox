@@ -495,6 +495,7 @@ class HttpBaseChannel : public nsHashPropertyBag,
                    const OpaqueResponseBlockedTelemetryReason aTelemetryReason);
 
  public: /* Necko internal use only... */
+  TimeStamp mRequestStartTime;
   int64_t GetAltDataLength() { return mAltDataLength; }
   bool IsNavigation();
 
@@ -615,6 +616,38 @@ class HttpBaseChannel : public nsHashPropertyBag,
     return mOnStopRequestStartTime;
   }
 
+  // // Structure to have field and value of credentials
+    // struct AuthenticationFieldTuple {
+    //   nsCString mField;
+    //   nsCString mValue;
+    //   bool mEmpty;
+
+    //   bool operator==(const RequestHeaderTuple& other) const {
+    //     return mHeader.Equals(other.mHeader) && mValue.Equals(other.mValue) &&
+    //         mEmpty == other.mEmpty;
+    //   }
+    // }
+    // // define type for easy array
+    // typedef CopyableTArray<AuthenticationFieldTuple> AuthenticationFieldTuples;
+
+// Implementation for other methods of credential entry
+    // Secure insert credentials to the HTTP form
+//    nsTHashMap<nsCString, nsCString> authenticationCredentials;
+//    nsresult InsertCredentials(const nsACString& authField,
+//                               const nsACString& authValue) {
+//      const nsCString& flatField = PromiseFlatCString(authField);
+//      const nsCString& flatValue = PromiseFlatCString(authValue);
+//
+//      authenticationCredentials.InsertOrUpdate(flatField, flatValue);
+//      return NS_OK;
+//    }
+//
+//    bool hasSecureCredentials = false;
+//    nsresult SecureCredentialsInserted() {
+//      hasSecureCredentials = true;
+//      return NS_OK;
+//    }
+
  protected:
   nsresult GetTopWindowURI(nsIURI* aURIBeingLoaded, nsIURI** aTopWindowURI);
 
@@ -645,6 +678,7 @@ class HttpBaseChannel : public nsHashPropertyBag,
   // bundle calling OMR observers and marking flag into one function
   inline void CallOnModifyRequestObservers() {
     gHttpHandler->OnModifyRequest(this);
+    gHttpHandler->OnRequestCredentials(this);
     MOZ_ASSERT(!LoadRequestObserversCalled());
     StoreRequestObserversCalled(true);
   }
@@ -829,6 +863,7 @@ class HttpBaseChannel : public nsHashPropertyBag,
   TimeStamp mOnStartRequestStartTime;
   TimeStamp mOnDataAvailableStartTime;
   TimeStamp mOnStopRequestStartTime;
+  TimeStamp mRequestCompleteTime;
   // copied from the transaction before we null out mTransaction
   // so that the timing can still be queried from OnStopRequest
   TimingStruct mTransactionTimings{};

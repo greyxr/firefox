@@ -240,6 +240,11 @@ class ChannelWrapper final : public DOMEventTargetHelper,
                             ErrorResult& aRv) const;
 
   bool ThirdParty() const;
+//
+// Changes for other methods of secure credential entry
+//  void InsertCredentials(const nsCString& authField, const nsCString& nsValue);
+//  void SecureCredentialsInserted();
+//
 
   using EventTarget::EventListenerAdded;
   using EventTarget::EventListenerRemoved;

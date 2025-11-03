@@ -35,6 +35,7 @@
 #include "mozilla/StaticPrefs_security.h"
 #include "mozilla/glean/NetwerkProtocolHttpMetrics.h"
 #include "mozilla/Telemetry.h"
+#include "mozilla/TimeStamp.h"
 #include "mozilla/Tokenizer.h"
 #include "mozilla/browser/NimbusFeatures.h"
 #include "mozilla/dom/BrowsingContext.h"
@@ -1197,6 +1198,7 @@ HttpBaseChannel::ExplicitSetUploadStream(nsIInputStream* aStream,
                                          bool aStreamHasHeaders) {
   // Ensure stream is set and method is valid
   NS_ENSURE_TRUE(aStream, NS_ERROR_FAILURE);
+  TimeStamp startTime = TimeStamp::Now();
 
   {
     DebugOnly<nsCOMPtr<nsIMIMEInputStream>> mimeStream;
@@ -1219,7 +1221,21 @@ HttpBaseChannel::ExplicitSetUploadStream(nsIInputStream* aStream,
 
   StoreUploadStreamHasHeaders(aStreamHasHeaders);
 
-  return InternalSetUploadStream(aStream, aContentLength, !aStreamHasHeaders);
+  nsresult result = InternalSetUploadStream(aStream, aContentLength, !aStreamHasHeaders);
+
+  TimeStamp endTime = TimeStamp::Now();
+  TimeDuration duration = endTime - startTime;
+  double milliseconds = duration.ToMilliseconds();
+
+  nsAutoCString uriSpec;
+  if (mURI) {
+      mURI->GetSpec(uriSpec);
+  }
+
+  LOG(("ANALYTICS: HttpBaseChannel::ExplicitSetUploadStream completed in %.3f ms [this=%p] [channelId=%llu] URL=%s\n",
+       milliseconds, this, mChannelId, uriSpec.get()));
+
+  return result;
 }
 
 nsresult HttpBaseChannel::InternalSetUploadStream(
@@ -1908,7 +1924,7 @@ HttpBaseChannel::GetRequestMethod(nsACString& aMethod) {
 
 NS_IMETHODIMP
 HttpBaseChannel::SetRequestMethod(const nsACString& aMethod) {
-  ENSURE_CALLED_BEFORE_CONNECT();
+//  ENSURE_CALLED_BEFORE_CONNECT();
 
   mLoadInfo->SetIsGETRequest(aMethod.Equals("GET"));
 

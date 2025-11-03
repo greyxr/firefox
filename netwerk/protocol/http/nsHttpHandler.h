@@ -372,6 +372,11 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
     NotifyObservers(chan, NS_HTTP_ON_MODIFY_REQUEST_TOPIC);
   }
 
+// Called by the channel when credentials are ready to be replaced
+void OnRequestCredentials(nsIHttpChannel* chan) {
+  NotifyObservers(chan, NS_HTTP_ON_REQUEST_CREDENTIALS_TOPIC);
+}
+
   // Same as OnModifyRequest but before cookie headers are written.
   void OnModifyRequestBeforeCookies(nsIHttpChannel* chan) {
     NotifyObservers(chan, NS_HTTP_ON_MODIFY_REQUEST_BEFORE_COOKIES_TOPIC);

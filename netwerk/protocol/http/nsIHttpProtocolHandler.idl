@@ -148,6 +148,7 @@ interface nsIHttpProtocolHandler : nsIProxiedProtocolHandler
  * The "subject" of the notification is the nsIHttpChannel instance.
  */
 #define NS_HTTP_ON_MODIFY_REQUEST_TOPIC "http-on-modify-request"
+#define NS_HTTP_ON_REQUEST_CREDENTIALS_TOPIC "http-on-request-credentials"
 
 /**
  * Same as http-on-modify-request, but called before the cookie header is set on

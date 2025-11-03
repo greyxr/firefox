@@ -7,6 +7,7 @@
 EXTRA_JS_MODULES += [
     "SecurityInfo.sys.mjs",
     "WebRequest.sys.mjs",
+    "WebRequestReplaceCredentials.sys.mjs",
     "WebRequestUpload.sys.mjs",
 ]
 

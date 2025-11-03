@@ -13,6 +13,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ExtensionUtils: "resource://gre/modules/ExtensionUtils.sys.mjs",
   SecurityInfo: "resource://gre/modules/SecurityInfo.sys.mjs",
   WebRequestUpload: "resource://gre/modules/WebRequestUpload.sys.mjs",
+  WebRequestReplaceCredentials: "resource://gre/modules/WebRequestReplaceCredentials.sys.mjs",
 });
 
 // WebRequest.sys.mjs's only consumer is ext-webRequest.js, so we can depend on
@@ -599,6 +600,7 @@ HttpObserverManager = {
   listeners: {
     // onBeforeRequest uses http-on-modify observer for HTTP(S).
     onBeforeRequest: new Map(),
+    onRequestCredentials: new Map(),
 
     // onBeforeSendHeaders and onSendHeaders correspond to the
     // http-on-before-connect observer.
@@ -667,6 +669,7 @@ HttpObserverManager = {
   // there are no more listeners for corresponding webRequest events.
   addOrRemove() {
     let needOpening = this.listeners.onBeforeRequest.size || this.dnrActive;
+    let needCredentials = this.listeners.onRequestCredentials.size;
     let needBeforeConnect =
       this.listeners.onBeforeSendHeaders.size ||
       this.listeners.onSendHeaders.size ||
@@ -678,6 +681,16 @@ HttpObserverManager = {
       this.openingInitialized = false;
       Services.obs.removeObserver(this, "http-on-modify-request");
     }
+
+    // Add observer for onRequestCredentials
+    if (needCredentials && !this.credentialsInitialized) {
+      this.credentialsInitialized = true;
+      Services.obs.addObserver(this, "http-on-request-credentials");
+    } else if (!needCredentials && this.credentialsInitialized) {
+      this.credentialsInitialized = false;
+      Services.obs.removeObserver(this, "http-on-request-credentials");
+    }
+
     if (needBeforeConnect && !this.beforeConnectInitialized) {
       this.beforeConnectInitialized = true;
       Services.obs.addObserver(this, "http-on-before-connect");
@@ -758,6 +771,9 @@ HttpObserverManager = {
     switch (topic) {
       case "http-on-modify-request":
         this.runChannelListener(channel, "onBeforeRequest");
+        break;
+      case "http-on-request-credentials":
+        this.runChannelListener(channel, "onRequestCredentials");
         break;
       case "http-on-before-connect":
         this.runChannelListener(channel, "onBeforeSendHeaders");
@@ -900,6 +916,7 @@ HttpObserverManager = {
   ]),
   FILTER_TYPES: new Set([
     "onBeforeRequest",
+    "onRequestCredentials",
     "onBeforeSendHeaders",
     "onSendHeaders",
     "onHeadersReceived",
@@ -1015,8 +1032,16 @@ HttpObserverManager = {
           data.requestBody = requestBody;
         }
 
+        console.log("onRequestCredentials");
         try {
+          if (kind === 'onRequestCredentials') {
+            data.requestBody = {};
+          }
           let result = callback(data);
+
+          if (kind === 'onRequestCredentials') {
+            data.requestBody = requestBody;
+          }
 
           if (typeof result === "object" && opts.blocking) {
             handlerResults.push({ opts, result });
@@ -1098,6 +1123,26 @@ HttpObserverManager = {
             continue;
           }
         }
+
+
+        // Credentials insertion entrypoint
+        if (kind === "onRequestCredentials" && result.credentials) {
+          const { credentials, url } = result;
+          console.log(credentials);
+          if (Object.keys(credentials).length !== 0 && url) {
+            const sameOrigin = this.isSameDomain(channel.channel.URI.host, url);
+            if (sameOrigin) {
+              const replacementResult = lazy.WebRequestReplaceCredentials.replaceRawCredentials(
+                  channel.channel,
+                  chanId,
+                  credentials,
+                  url
+              );
+              // console.log('Credentials replacement result:', replacementResult);
+            }
+          }
+        }
+
 
         if (result.cancel) {
           channel.resume();
@@ -1220,7 +1265,29 @@ HttpObserverManager = {
     }
   },
 
-  shouldHookListener(listener, channel, extraData) {
+  isSameDomain(host, url) {
+    try {
+      const extractDomain = (hostname) => {
+        const parts = hostname.split('.').reverse();
+        if (parts.length >= 2) {
+          return parts[1] + '.' + parts[0];
+        }
+        return hostname;
+      };
+
+      const urlObj = new URL(url);
+      const domainFromUrl = extractDomain(urlObj.hostname);
+      const domainFromHost = extractDomain(host);
+
+      return domainFromUrl === domainFromHost;
+    } catch (err) {
+      console.error("Invalid input:", err);
+      return false;
+    }
+  },
+
+
+shouldHookListener(listener, channel, extraData) {
     if (listener.size == 0) {
       return false;
     }
@@ -1287,6 +1354,11 @@ var onBeforeRequest = new HttpEvent("onBeforeRequest", [
   "blocking",
   "requestBody",
 ]);
+
+var onRequestCredentials = new HttpEvent("onRequestCredentials", [
+  "blocking",
+  "requestBody",
+]);
 var onBeforeSendHeaders = new HttpEvent("onBeforeSendHeaders", [
   "requestHeaders",
   "blocking",
@@ -1320,6 +1392,7 @@ export var WebRequest = {
   },
 
   onBeforeRequest,
+  onRequestCredentials,
   onBeforeSendHeaders,
   onSendHeaders,
   onHeadersReceived,

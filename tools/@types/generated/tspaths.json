@@ -6143,6 +6143,9 @@
       "resource://gre/modules/WebRequest.sys.mjs": [
         "toolkit/components/extensions/webrequest/WebRequest.sys.mjs"
       ],
+      "resource://gre/modules/WebRequestReplaceCredentials.sys.mjs": [
+        "toolkit/components/extensions/webrequest/WebRequestReplaceCredentials.sys.mjs"
+      ],
       "resource://gre/modules/WebRequestUpload.sys.mjs": [
         "toolkit/components/extensions/webrequest/WebRequestUpload.sys.mjs"
       ],

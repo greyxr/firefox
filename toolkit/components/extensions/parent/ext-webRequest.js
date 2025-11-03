@@ -8,6 +8,14 @@ ChromeUtils.defineESModuleGetters(this, {
   WebRequest: "resource://gre/modules/WebRequest.sys.mjs",
 });
 
+// Add this debug block temporarily:
+console.log("=== WebRequest Debug ===");
+// console.log("WebRequest object:", WebRequest);
+// console.log("onBeforeRequest exists:", !!WebRequest.onBeforeRequest);
+// console.log("onRequestCredentials exists:", !!WebRequest.onRequestCredentials);
+// console.log("Available WebRequest keys:", Object.keys(WebRequest));
+console.log("========================");
+
 var { parseMatchPatterns, DefaultMap } = ExtensionUtils;
 
 const MAX_HANDLER_BEHAVIOR_CHANGED_CALLS_PER_10_MINUTES = 20;
@@ -171,6 +179,7 @@ this.webRequest = class extends ExtensionAPIPersistent {
 
   PERSISTENT_EVENTS = {
     onBeforeRequest: makeWebRequestEventRegistrar("onBeforeRequest"),
+    onRequestCredentials: makeWebRequestEventRegistrar("onRequestCredentials"),
     onBeforeSendHeaders: makeWebRequestEventRegistrar("onBeforeSendHeaders"),
     onSendHeaders: makeWebRequestEventRegistrar("onSendHeaders"),
     onHeadersReceived: makeWebRequestEventRegistrar("onHeadersReceived"),
@@ -188,6 +197,11 @@ this.webRequest = class extends ExtensionAPIPersistent {
           context,
           "onBeforeRequest",
           this
+        ),
+        onRequestCredentials: makeWebRequestEventAPI(
+            context,
+            "onRequestCredentials",
+            this
         ),
         onBeforeSendHeaders: makeWebRequestEventAPI(
           context,

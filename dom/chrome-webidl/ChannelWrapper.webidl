@@ -124,6 +124,17 @@ interface ChannelWrapper : EventTarget {
   [Throws]
   undefined upgradeToSecure();
 
+
+  /**
+   * Secure insert credentials into the channel, design 3
+   */
+  // undefined insertCredentials(ByteString authField, ByteString nsValue);
+
+  /**
+   *  Sets the flag to indicate credentials inserted for analytics
+   */
+  // undefined secureCredentialsInserted();
+
   /**
    * Suspends the underlying channel.  The profilerText parameter is only used
    * to annotate profiles.

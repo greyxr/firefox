@@ -63,6 +63,12 @@
         "postprocess": "webRequestBlockingPermissionRequired"
       },
       {
+        "id": "OnBeforeCredentialsOptions",
+        "type": "string",
+        "enum": ["blocking", "requestBody"],
+        "postprocess": "webRequestBlockingPermissionRequired"
+      },
+      {
         "id": "OnBeforeSendHeadersOptions",
         "type": "string",
         "enum": ["requestHeaders", "blocking"],
@@ -500,6 +506,126 @@
     "events": [
       {
         "name": "onBeforeRequest",
+        "type": "function",
+        "description": "Fired when a request is about to occur.",
+        "parameters": [
+          {
+            "type": "object",
+            "name": "details",
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "description": "The ID of the request. Request IDs are unique within a browser session. As a result, they could be used to relate different events of the same request."
+              },
+              "url": { "type": "string" },
+              "method": {
+                "type": "string",
+                "description": "Standard HTTP method."
+              },
+              "frameId": {
+                "type": "integer",
+                "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."
+              },
+              "parentFrameId": {
+                "type": "integer",
+                "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."
+              },
+              "incognito": {
+                "type": "boolean",
+                "optional": true,
+                "description": "True for private browsing requests."
+              },
+              "cookieStoreId": {
+                "type": "string",
+                "optional": true,
+                "description": "The cookie store ID of the contextual identity."
+              },
+              "originUrl": {
+                "type": "string",
+                "optional": true,
+                "description": "URL of the resource that triggered this request."
+              },
+              "documentUrl": {
+                "type": "string",
+                "optional": true,
+                "description": "URL of the page into which the requested resource will be loaded."
+              },
+              "requestBody": {
+                "type": "object",
+                "optional": true,
+                "description": "Contains the HTTP request body data. Only provided if extraInfoSpec contains 'requestBody'.",
+                "properties": {
+                  "error": {
+                    "type": "string",
+                    "optional": true,
+                    "description": "Errors when obtaining request body data."
+                  },
+                  "formData": {
+                    "type": "object",
+                    "optional": true,
+                    "description": "If the request method is POST and the body is a sequence of key-value pairs encoded in UTF8, encoded as either multipart/form-data, or application/x-www-form-urlencoded, this dictionary is present and for each key contains the list of all values for that key. If the data is of another media type, or if it is malformed, the dictionary is not present. An example value of this dictionary is {'key': ['value1', 'value2']}.",
+                    "properties": {},
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  },
+                  "raw": {
+                    "type": "array",
+                    "optional": true,
+                    "items": { "$ref": "UploadData" },
+                    "description": "If the request method is PUT or POST, and the body is not already parsed in formData, then the unparsed request body elements are contained in this array."
+                  }
+                }
+              },
+              "tabId": {
+                "type": "integer",
+                "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."
+              },
+              "type": {
+                "$ref": "ResourceType",
+                "description": "How the requested resource will be used."
+              },
+              "timeStamp": {
+                "type": "number",
+                "description": "The time when this signal is triggered, in milliseconds since the epoch."
+              },
+              "urlClassification": {
+                "$ref": "UrlClassification",
+                "optional": true,
+                "description": "Tracking classification if the request has been classified."
+              },
+              "thirdParty": {
+                "type": "boolean",
+                "description": "Indicates if this request and its content window hierarchy is third party."
+              }
+            }
+          }
+        ],
+        "extraParameters": [
+          {
+            "$ref": "RequestFilter",
+            "name": "filter",
+            "description": "A set of filters that restricts the events that will be sent to this listener."
+          },
+          {
+            "type": "array",
+            "optional": true,
+            "name": "extraInfoSpec",
+            "description": "Array of extra information that should be passed to the listener function.",
+            "items": {
+              "$ref": "OnBeforeRequestOptions"
+            }
+          }
+        ],
+        "returns": {
+          "$ref": "BlockingResponse",
+          "description": "If \"blocking\" is specified in the \"extraInfoSpec\" parameter, the event listener should return an object of this type.",
+          "optional": true
+        }
+      },
+      {
+        "name": "onRequestCredentials",
         "type": "function",
         "description": "Fired when a request is about to occur.",
         "parameters": [

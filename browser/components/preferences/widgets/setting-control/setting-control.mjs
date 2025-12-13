@@ -7,7 +7,6 @@ import {
   html,
   ifDefined,
   literal,
-  nothing,
   ref,
   staticHtml,
   unsafeStatic,
@@ -16,14 +15,53 @@ import {
   SettingElement,
   spread,
 } from "chrome://browser/content/preferences/widgets/setting-element.mjs";
+import MozInputFolder from "chrome://global/content/elements/moz-input-folder.mjs";
 
-/** @import MozCheckbox from "../../../../../toolkit/content/widgets/moz-checkbox/moz-checkbox.mjs"*/
-/** @import { Setting } from "chrome://global/content/preferences/Setting.mjs"; */
+/** @import { LitElement, Ref, TemplateResult } from "chrome://global/content/vendor/lit.all.mjs" */
+/** @import { SettingElementConfig } from "chrome://browser/content/preferences/widgets/setting-element.mjs" */
+/** @import { Setting } from "chrome://global/content/preferences/Setting.mjs" */
+
+/**
+ * @typedef {object} SettingNestedConfig
+ * @property {SettingControlConfig[]} [items] Additional nested SettingControls to render.
+ * @property {SettingOptionConfig[]} [options]
+ * Additional nested plain elements to render (may have SettingControls nested within them, though).
+ */
+
+/**
+ * @typedef {object} SettingOptionConfigExtensions
+ * @property {string} [control]
+ * The element tag to render, default assumed based on parent control.
+ * @property {any} [value] A value to set on the option.
+ */
+
+/**
+ * @typedef {object} SettingControlConfigExtensions
+ * @property {string} id
+ * The ID for the Setting, also set in the DOM unless overridden with controlAttrs.id
+ * @property {string} [control] The element to render, default to "moz-checkbox".
+ * @property {string} [controllingExtensionInfo]
+ * ExtensionSettingStore id for checking if a setting is controlled by an extension.
+ */
+
+/**
+ * @typedef {SettingOptionConfigExtensions & SettingElementConfig & SettingNestedConfig} SettingOptionConfig
+ * @typedef {SettingControlConfigExtensions & SettingElementConfig & SettingNestedConfig} SettingControlConfig
+ * @typedef {{ control: SettingControl } & HTMLElement} SettingControlChild
+ */
+
+/**
+ * @template T=Event
+ * @typedef {T & { target: SettingControlChild }} SettingControlEvent
+ * SettingControlEvent simplifies the types in this file, but causes issues when
+ * doing more involved work when used in Setting.mjs. When casting the
+ * `event.target` to a more specific type like MozButton (or even
+ * HTMLButtonElement) it gets flagged as being too different from SettingControlChild.
+ */
 
 /**
  * Mapping of parent control tag names to the literal tag name for their
  * expected children. eg. "moz-radio-group"->literal`moz-radio`.
- * @type Map<string, literal>
  */
 const KNOWN_OPTIONS = new Map([
   ["moz-radio-group", literal`moz-radio`],
@@ -35,6 +73,7 @@ const KNOWN_OPTIONS = new Map([
  * Mapping of parent control tag names to the expected slot for their children.
  * If there's no entry here for a control then it's expected that its children
  * should go in the default slot.
+ *
  * @type Map<string, string>
  */
 const ITEM_SLOT_BY_PARENT = new Map([
@@ -43,6 +82,7 @@ const ITEM_SLOT_BY_PARENT = new Map([
   ["moz-input-search", "nested"],
   ["moz-input-folder", "nested"],
   ["moz-input-password", "nested"],
+  ["moz-radio", "nested"],
   ["moz-radio-group", "nested"],
   // NOTE: moz-select does not support the nested slot.
   ["moz-toggle", "nested"],
@@ -66,8 +106,9 @@ export class SettingControl extends SettingElement {
     config: { type: Object },
     value: {},
     parentDisabled: { type: Boolean },
-    showEnableExtensionMessage: { type: Boolean },
     tabIndex: { type: Number, reflect: true },
+    showEnableExtensionMessage: { type: Boolean, state: true },
+    isDisablingExtension: { type: Boolean, state: true },
   };
 
   /**
@@ -77,6 +118,7 @@ export class SettingControl extends SettingElement {
 
   constructor() {
     super();
+    /** @type {Ref<LitElement>} */
     this.controlRef = createRef();
 
     /**
@@ -90,7 +132,7 @@ export class SettingControl extends SettingElement {
     this.setting = undefined;
 
     /**
-     * @type {PreferencesSettingsConfig | undefined}
+     * @type {SettingControlConfig | undefined}
      */
     this.config = undefined;
 
@@ -103,6 +145,11 @@ export class SettingControl extends SettingElement {
      * @type {boolean}
      */
     this.showEnableExtensionMessage = false;
+
+    /**
+     * @type {boolean}
+     */
+    this.isDisablingExtension = false;
   }
 
   createRenderRoot() {
@@ -110,7 +157,7 @@ export class SettingControl extends SettingElement {
   }
 
   focus() {
-    this.controlRef.value.focus();
+    this.controlEl.focus();
   }
 
   get controlEl() {
@@ -150,9 +197,6 @@ export class SettingControl extends SettingElement {
     }
   }
 
-  /**
-   * @type {MozLitElement['updated']}
-   */
   updated() {
     const control = this.controlRef?.value;
     if (!control) {
@@ -177,7 +221,7 @@ export class SettingControl extends SettingElement {
    * or controlled by an extension but not both.
    *
    * @override
-   * @param {PreferencesSettingsConfig} config
+   * @param {SettingElementConfig} config
    * @returns {ReturnType<SettingElement['getCommonPropertyMapping']>}
    */
   getCommonPropertyMapping(config) {
@@ -190,15 +234,21 @@ export class SettingControl extends SettingElement {
 
   /**
    * The default properties for an option.
+   *
+   * @param {SettingOptionConfig} config
    */
   getOptionPropertyMapping(config) {
     const props = this.getCommonPropertyMapping(config);
     props[".value"] = config.value;
+    props[".disabled"] = config.disabled;
+    props[".hidden"] = config.hidden;
     return props;
   }
 
   /**
    * The default properties for this control.
+   *
+   * @param {SettingControlConfig} config
    */
   getControlPropertyMapping(config) {
     const props = this.getCommonPropertyMapping(config);
@@ -220,30 +270,47 @@ export class SettingControl extends SettingElement {
   };
 
   /**
-   * @param {MozCheckbox | HTMLInputElement} el
-   * @returns {boolean | string | undefined}
+   * @param {HTMLElement} el
+   * @returns {any}
    */
   controlValue(el) {
-    if (el.constructor.activatedProperty && el.localName != "moz-radio") {
-      return el[el.constructor.activatedProperty];
-    } else if (el.localName == "moz-input-folder") {
+    let Cls = el.constructor;
+    if (
+      "activatedProperty" in Cls &&
+      Cls.activatedProperty &&
+      el.localName != "moz-radio"
+    ) {
+      return el[/** @type {keyof typeof el} */ (Cls.activatedProperty)];
+    }
+    if (el instanceof MozInputFolder) {
       return el.folder;
     }
-    return el.value;
+    return "value" in el ? el.value : null;
   }
 
-  // Called by our parent when our input changed.
+  /**
+   * Called by our parent when our input changed.
+   *
+   * @param {SettingControlChild} el
+   */
   onChange(el) {
     this.setting.userChange(this.controlValue(el));
   }
 
+  /**
+   * Called by our parent when our input is clicked.
+   *
+   * @param {MouseEvent} event
+   */
   onClick(event) {
     this.setting.userClick(event);
   }
 
   async disableExtension() {
-    await this.setting.disableControllingExtension();
+    this.isDisablingExtension = true;
     this.showEnableExtensionMessage = true;
+    await this.setting.disableControllingExtension();
+    this.isDisablingExtension = false;
   }
 
   isControlledByExtension() {
@@ -257,11 +324,16 @@ export class SettingControl extends SettingElement {
     this.showEnableExtensionMessage = false;
   }
 
+  /**
+   * @param {MouseEvent} event
+   */
   navigateToAddons(event) {
-    if (event.target.matches("a[data-l10n-name='addons-link']")) {
+    let link = /** @type {HTMLAnchorElement} */ (event.target);
+    if (link.matches("a[data-l10n-name='addons-link']")) {
       event.preventDefault();
+      // @ts-ignore
       let mainWindow = window.browsingContext.topChromeWindow;
-      mainWindow.BrowserAddonUI.openAddonsMgr("addons://list/theme");
+      mainWindow.BrowserAddonUI.openAddonsMgr("addons://list/extension");
     }
   }
 
@@ -273,40 +345,77 @@ export class SettingControl extends SettingElement {
     return this.setting.controllingExtensionInfo.l10nId;
   }
 
+  /**
+   * Prepare nested item config and settings.
+   *
+   * @param {SettingControlConfig | SettingOptionConfig} config
+   * @returns {TemplateResult[]}
+   */
+  itemsTemplate(config) {
+    if (!config.items) {
+      return [];
+    }
+
+    const itemArgs = config.items.map(i => ({
+      config: i,
+      setting: this.getSetting(i.id),
+    }));
+    let control = config.control || "moz-checkbox";
+    return itemArgs.map(
+      item =>
+        html`<setting-control
+          .config=${item.config}
+          .setting=${item.setting}
+          .getSetting=${this.getSetting}
+          slot=${ifDefined(
+            item.config.slot || ITEM_SLOT_BY_PARENT.get(control)
+          )}
+        ></setting-control>`
+    );
+  }
+
+  /**
+   * Prepares any children (and any of its children's children) that this element may need.
+   *
+   * @param {SettingOptionConfig} config
+   * @returns {TemplateResult[]}
+   */
+  optionsTemplate(config) {
+    if (!config.options) {
+      return [];
+    }
+    let control = config.control || "moz-checkbox";
+    return config.options.map(opt => {
+      let optionTag = opt.control
+        ? unsafeStatic(opt.control)
+        : KNOWN_OPTIONS.get(control);
+      let spreadValues = spread(this.getOptionPropertyMapping(opt));
+      let children =
+        "items" in opt ? this.itemsTemplate(opt) : this.optionsTemplate(opt);
+      if (opt.control == "a" && opt.controlAttrs?.is == "moz-support-link") {
+        // The `is` attribute must be set when the element is first added to the
+        // DOM. We need to mark that up manually, since `spread()` uses
+        // `el.setAttribute()` to set attributes it receives.
+        return html`<a is="moz-support-link" ${spreadValues}>${children}</a>`;
+      }
+      return staticHtml`<${optionTag} ${spreadValues}>${children}</${optionTag}>`;
+    });
+  }
+
+  get extensionSupportPage() {
+    return this.setting.controllingExtensionInfo.supportPage;
+  }
+
   render() {
     // Allow the Setting to override the static config if necessary.
     this.config = this.setting.getControlConfig(this.config);
     let { config } = this;
     let control = config.control || "moz-checkbox";
-    let getItemArgs = items =>
-      items?.map(i => ({
-        config: i,
-        setting: this.getSetting(i.id),
-      })) || [];
 
-    // Prepare nested item config and settings.
-    let itemArgs = getItemArgs(config.items);
-    let itemTemplate = opts =>
-      html`<setting-control
-        .config=${opts.config}
-        .setting=${opts.setting}
-        .getSetting=${this.getSetting}
-        slot=${ifDefined(ITEM_SLOT_BY_PARENT.get(control))}
-      ></setting-control>`;
-    let nestedSettings = itemArgs.map(itemTemplate);
-
-    // Prepare any children that this element may need.
-    let controlChildren = nothing;
-    if (config.options) {
-      controlChildren = config.options.map(opt => {
-        let optionTag = opt.control
-          ? unsafeStatic(opt.control)
-          : KNOWN_OPTIONS.get(control);
-        return staticHtml`<${optionTag}
-          ${spread(this.getOptionPropertyMapping(opt))}
-        >${opt.items ? getItemArgs(opt.items).map(itemTemplate) : ""}</${optionTag}>`;
-      });
-    }
+    let nestedSettings =
+      "items" in config
+        ? this.itemsTemplate(config)
+        : this.optionsTemplate(config);
 
     // Get the properties for this element: id, fluent, disabled, etc.
     // These will be applied to the control using the spread directive.
@@ -319,14 +428,23 @@ export class SettingControl extends SettingElement {
     // there are no extensions controlling the setting.
     if (this.isControlledByExtension()) {
       let args = { name: this.extensionName };
+      let supportPage = this.extensionSupportPage;
       messageBar = html`<moz-message-bar
         class="extension-controlled-message-bar"
         .messageL10nId=${this.extensionMessageId}
         .messageL10nArgs=${args}
       >
+        ${supportPage
+          ? html`<a
+              is="moz-support-link"
+              slot="support-link"
+              support-page=${supportPage}
+            ></a>`
+          : ""}
         <moz-button
           slot="actions"
           @click=${this.disableExtension}
+          ?disabled=${this.isDisablingExtension}
           data-l10n-id="disable-extension"
         ></moz-button>
       </moz-message-bar>`;
@@ -351,7 +469,7 @@ export class SettingControl extends SettingElement {
       ${spread(controlProps)}
       ${ref(this.controlRef)}
       tabindex=${ifDefined(this.tabIndex)}
-    >${controlChildren}${nestedSettings}</${tag}>`;
+    >${nestedSettings}</${tag}>`;
   }
 }
 customElements.define("setting-control", SettingControl);

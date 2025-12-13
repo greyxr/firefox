@@ -16,6 +16,7 @@ import {
 import {
   ERRORS,
   STEPS,
+  errorString,
 } from "chrome://browser/content/backup/backup-constants.mjs";
 import { BackupError } from "resource:///modules/backup/BackupError.mjs";
 
@@ -23,7 +24,11 @@ const BACKUP_DIR_PREF_NAME = "browser.backup.location";
 const BACKUP_ERROR_CODE_PREF_NAME = "browser.backup.errorCode";
 const SCHEDULED_BACKUPS_ENABLED_PREF_NAME = "browser.backup.scheduled.enabled";
 const BACKUP_ARCHIVE_ENABLED_PREF_NAME = "browser.backup.archive.enabled";
+const BACKUP_ARCHIVE_ENABLED_OVERRIDE_PREF_NAME =
+  "browser.backup.archive.overridePlatformCheck";
 const BACKUP_RESTORE_ENABLED_PREF_NAME = "browser.backup.restore.enabled";
+const BACKUP_RESTORE_ENABLED_OVERRIDE_PREF_NAME =
+  "browser.backup.restore.overridePlatformCheck";
 const IDLE_THRESHOLD_SECONDS_PREF_NAME =
   "browser.backup.scheduled.idle-threshold-seconds";
 const MINIMUM_TIME_BETWEEN_BACKUPS_SECONDS_PREF_NAME =
@@ -39,6 +44,8 @@ const BACKUP_DEBUG_INFO_PREF_NAME = "browser.backup.backup-debug-info";
 const MAXIMUM_NUMBER_OF_UNREMOVABLE_STAGING_ITEMS_PREF_NAME =
   "browser.backup.max-num-unremovable-staging-items";
 const CREATED_MANAGED_PROFILES_PREF_NAME = "browser.profiles.created";
+const RESTORED_BACKUP_METADATA_PREF_NAME =
+  "browser.backup.restored-backup-metadata";
 
 const SCHEMAS = Object.freeze({
   BACKUP_MANIFEST: 1,
@@ -184,6 +191,38 @@ XPCOMUtils.defineLazyPreferenceGetter(
   "maximumNumberOfUnremovableStagingItems",
   MAXIMUM_NUMBER_OF_UNREMOVABLE_STAGING_ITEMS_PREF_NAME,
   5
+);
+
+XPCOMUtils.defineLazyPreferenceGetter(
+  lazy,
+  "backupErrorCode",
+  BACKUP_ERROR_CODE_PREF_NAME,
+  0,
+  function onUpdateBackupErrorCode(_pref, _prevVal, newVal) {
+    let bs = BackupService.get();
+    if (bs) {
+      bs.onUpdateBackupErrorCode(newVal);
+    }
+  }
+);
+
+XPCOMUtils.defineLazyPreferenceGetter(
+  lazy,
+  "lastBackupFileName",
+  LAST_BACKUP_FILE_NAME_PREF_NAME,
+  "",
+  function onUpdateLastBackupFileName(_pref, _prevVal, newVal) {
+    let bs;
+    try {
+      bs = BackupService.get();
+    } catch (e) {
+      // This can throw if the BackupService hasn't initialized yet, which
+      // is a case we're okay to ignore.
+    }
+    if (bs) {
+      bs.onUpdateLastBackupFileName(newVal);
+    }
+  }
 );
 
 XPCOMUtils.defineLazyServiceGetter(
@@ -586,7 +625,7 @@ export class BackupService extends EventTarget {
    *
    * @see BACKUP_DIR_NAME
    */
-  static #backupFolderName = null;
+  static #backupFolderName = "Restore Firefox";
 
   /**
    * The name of the backup archive file. Should be localized.
@@ -617,7 +656,17 @@ export class BackupService extends EventTarget {
     // Check if disabled by Nimbus killswitch.
     const archiveKillswitchTriggered =
       lazy.NimbusFeatures.backupService.getVariable("archiveKillswitch");
-    if (archiveKillswitchTriggered) {
+    const archiveOverrideEnabled = Services.prefs.getBoolPref(
+      BACKUP_ARCHIVE_ENABLED_OVERRIDE_PREF_NAME,
+      false
+    );
+    // This is explicitly checking for archiveKillswitchTriggered !== false because
+    // we now also (potentially) want to use this nimbus setting for doing staged rollout
+    // of the feature. What this means is that if the value is:
+    //     - true: feature is turned off ("killed")
+    //     - undefined: feature is turned off (not launched yet)
+    //     - false: feature is turned on
+    if (archiveKillswitchTriggered !== false && !archiveOverrideEnabled) {
       return {
         enabled: false,
         reason: "Archiving a profile disabled remotely.",
@@ -659,6 +708,20 @@ export class BackupService extends EventTarget {
       };
     }
 
+    if (
+      !this.#osSupportsBackup &&
+      !Services.prefs.getBoolPref(
+        BACKUP_ARCHIVE_ENABLED_OVERRIDE_PREF_NAME,
+        false
+      )
+    ) {
+      return {
+        enabled: false,
+        reason: "Backup creation not enabled on this os version yet",
+        internalReason: "os version",
+      };
+    }
+
     return { enabled: true };
   }
 
@@ -671,7 +734,14 @@ export class BackupService extends EventTarget {
     // Check if disabled by Nimbus killswitch.
     const restoreKillswitchTriggered =
       lazy.NimbusFeatures.backupService.getVariable("restoreKillswitch");
-    if (restoreKillswitchTriggered) {
+    const restoreOverrideEnabled = Services.prefs.getBoolPref(
+      BACKUP_RESTORE_ENABLED_OVERRIDE_PREF_NAME,
+      false
+    );
+
+    // restoreKillswitch is a "normal" killswitch, in contrast
+    // to archiveKillswitch
+    if (restoreKillswitchTriggered && !restoreOverrideEnabled) {
       return {
         enabled: false,
         reason: "Restore from backup disabled remotely.",
@@ -710,6 +780,19 @@ export class BackupService extends EventTarget {
         reason:
           "Restoring a profile is disabled because the user has created selectable profiles.",
         internalReason: "selectable profiles",
+      };
+    }
+    if (
+      !this.#osSupportsRestore &&
+      !Services.prefs.getBoolPref(
+        BACKUP_RESTORE_ENABLED_OVERRIDE_PREF_NAME,
+        false
+      )
+    ) {
+      return {
+        enabled: false,
+        reason: "Backup restore not enabled on this os version yet",
+        internalReason: "os version",
       };
     }
 
@@ -759,6 +842,19 @@ export class BackupService extends EventTarget {
   }
 
   /**
+   * Sets the persisted options between screens for embedded components.
+   * This is specifically used in the Spotlight onboarding experience.
+   *
+   * This data is flushed upon creating a backup or exiting the backup flow.
+   *
+   * @param {object} data - data to persist between screens.
+   */
+  setEmbeddedComponentPersistentData(data) {
+    this.#_state.embeddedComponentPersistentData = { ...data };
+    this.stateUpdate();
+  }
+
+  /**
    * An object holding the current state of the BackupService instance, for
    * the purposes of representing it in the user interface. Ideally, this would
    * be named #state instead of #_state, but sphinx-js seems to be fairly
@@ -776,10 +872,21 @@ export class BackupService extends EventTarget {
     encryptionEnabled: false,
     /** @type {number?} Number of seconds since UNIX epoch */
     lastBackupDate: null,
-    lastBackupFileName: "",
+    lastBackupFileName: lazy.lastBackupFileName,
     supportBaseLink: Services.urlFormatter.formatURLPref("app.support.baseURL"),
     recoveryInProgress: false,
-    recoveryErrorCode: 0,
+    /**
+     * Every file we load successfully is going to get a restore ID which is
+     * basically the identifier for that profile restore event. If we actually
+     * do restore it, this ID will end up being propagated into the restored
+     * file and used to correlate this restore event with the profile that was
+     * restored.
+     */
+    restoreID: null,
+    /** Utilized by the spotlight to persist information between screens */
+    embeddedComponentPersistentData: {},
+    recoveryErrorCode: ERRORS.NONE,
+    backupErrorCode: lazy.backupErrorCode,
   };
 
   /**
@@ -870,8 +977,14 @@ export class BackupService extends EventTarget {
   #wasRestorePreviouslyDisabled = false;
 
   /**
-   * Monitors prefs that are relevant to the status of the backup service.
-   * Unlike #observer, this does not wait for an idle tick.
+   * Called when prefs or other conditions relevant to the status of the backup
+   * service change. Unlike #observer, this does not wait for an idle tick.
+   *
+   * This callback doesn't take any parameters. It's here so it can be removed
+   * by uninitStatusObservers, and also so its 'this' value remains accurate.
+   * If null, the conditions are not currently being monitored.
+   *
+   * @type {Function?}
    */
   #statusPrefObserver = null;
 
@@ -882,20 +995,11 @@ export class BackupService extends EventTarget {
    * @returns {string} The path of the default parent directory
    */
   static get DEFAULT_PARENT_DIR_PATH() {
-    let path = "";
-    try {
-      path =
-        BackupService.oneDriveFolderPath?.path ||
-        Services.dirsvc.get("Docs", Ci.nsIFile).path;
-    } catch (e) {
-      // If this errors, we can safely return an empty string
-      lazy.logConsole.error(
-        "There was an error when getting the Default Parent Directory: ",
-        e
-      );
-    }
-
-    return path;
+    return (
+      BackupService.oneDriveFolderPath?.path ||
+      BackupService.docsDirFolderPath?.path ||
+      ""
+    );
   }
 
   /**
@@ -1025,8 +1129,10 @@ export class BackupService extends EventTarget {
    * Prefs that should be monitored. When one of these prefs changes, the
    * 'backup-service-status-changed' observers are notified and telemetry
    * updates.
+   *
+   * @type {string[]}
    */
-  static get #STATUS_OBSERVER_PREFS() {
+  static get STATUS_OBSERVER_PREFS() {
     return [
       BACKUP_ARCHIVE_ENABLED_PREF_NAME,
       BACKUP_RESTORE_ENABLED_PREF_NAME,
@@ -1131,23 +1237,64 @@ export class BackupService extends EventTarget {
   }
 
   /**
+   * Gets the user's Documents folder.
+   * If it doesn't exist, return null.
+   *
+   * @returns {nsIFile|null} The Documents folder or null
+   */
+  static get docsDirFolderPath() {
+    try {
+      return Services.dirsvc.get("Docs", Ci.nsIFile);
+    } catch (e) {
+      lazy.logConsole.warn(
+        "There was an error while trying to get the Document's directory",
+        e
+      );
+    }
+    return null;
+  }
+
+  /**
    * Returns a reference to a BackupService singleton. If this is the first time
    * that this getter is accessed, this causes the BackupService singleton to be
-   * be instantiated.
+   * instantiated.
    *
    * @static
-   * @type {BackupService}
+   * @param {object} BackupResources
+   *   Optional object containing BackupResource classes to initialize the instance with.
+   * @returns {BackupService}
+   *   The BackupService singleton instance.
    */
-  static init() {
+  static init(BackupResources = DefaultBackupResources) {
     if (this.#instance) {
       return this.#instance;
     }
-    this.#instance = new BackupService(DefaultBackupResources);
+
+    // If there is unsent restore telemetry, send it now.
+    GleanPings.profileRestore.submit();
+
+    this.#instance = new BackupService(BackupResources);
 
     this.#instance.checkForPostRecovery();
     this.#instance.initBackupScheduler();
     this.#instance.initStatusObservers();
     return this.#instance;
+  }
+
+  /**
+   * Clears the BackupService singleton instance.
+   * This should only be used in tests.
+   *
+   * @static
+   */
+  static uninit() {
+    if (this.#instance) {
+      lazy.logConsole.debug("Uninitting the BackupService");
+
+      this.#instance.uninitBackupScheduler();
+      this.#instance.uninitStatusObservers();
+      this.#instance = null;
+    }
   }
 
   /**
@@ -1165,6 +1312,17 @@ export class BackupService extends EventTarget {
       );
     }
     return this.#instance;
+  }
+
+  static checkOsSupportsBackup(osParams) {
+    // Currently we only want to show Backup on Windows 10 devices.
+    // The first build of Windows 11 is 22000
+    return (
+      osParams.name == "Windows_NT" &&
+      osParams.version == "10.0" &&
+      osParams.build &&
+      Number(osParams.build) < 22000
+    );
   }
 
   /**
@@ -1187,16 +1345,64 @@ export class BackupService extends EventTarget {
     this.#postRecoveryResolver = resolve;
     this.#backupWriteAbortController = new AbortController();
     this.#regenerationDebouncer = new lazy.DeferredTask(async () => {
-      if (!this.#backupWriteAbortController.signal.aborted) {
-        await this.deleteLastBackup();
-        if (lazy.scheduledBackupsPref) {
-          await this.createBackupOnIdleDispatch({
-            reason: "user deleted some data",
-          });
-        }
+      if (
+        !this.#backupWriteAbortController.signal.aborted &&
+        this.archiveEnabledStatus.enabled
+      ) {
+        await this.createBackupOnIdleDispatch({
+          reason: "user deleted some data",
+        });
       }
     }, BackupService.REGENERATION_DEBOUNCE_RATE_MS);
+    this.#postRecoveryPromise.then(() => {
+      const payload = {
+        is_restored:
+          !!Services.prefs.getIntPref(
+            "browser.backup.profile-restoration-date",
+            0
+          ) &&
+          !Services.prefs.getBoolPref("browser.profiles.profile-copied", false),
+      };
+      if (payload.is_restored) {
+        let backupMetadata = {};
+        try {
+          backupMetadata = JSON.parse(
+            Services.prefs.getStringPref(
+              RESTORED_BACKUP_METADATA_PREF_NAME,
+              "{}"
+            )
+          );
+        } catch {}
+        payload.backup_timestamp = backupMetadata.date
+          ? new Date(backupMetadata.date).getTime()
+          : null;
+        payload.backup_app_name = backupMetadata.appName || null;
+        payload.backup_app_version = backupMetadata.appVersion || null;
+        payload.backup_build_id = backupMetadata.buildID || null;
+        payload.backup_os_name = backupMetadata.osName || null;
+        payload.backup_os_version = backupMetadata.osVersion || null;
+        payload.backup_legacy_client_id = backupMetadata.legacyClientID || null;
+      }
+      Glean.browserBackup.restoredProfileData.set(payload);
+    });
+    const osParams = {
+      name: Services.sysinfo.getProperty("name"),
+      version: Services.sysinfo.getProperty("version"),
+      build: Services.sysinfo.getProperty("build"),
+    };
+    this.#osSupportsBackup = BackupService.checkOsSupportsBackup(osParams);
+    this.#osSupportsRestore = true;
+    this.#lastSeenArchiveStatus = this.archiveEnabledStatus;
+    this.#lastSeenRestoreStatus = this.restoreEnabledStatus;
   }
+
+  // Backup is currently limited to Windows 10. Will be populated by constructor
+  #osSupportsBackup = false;
+  // Restore is not limited, but leaving this in place if restrictions are needed.
+  #osSupportsRestore = true;
+  // Remembering status allows us to notify observers when the status changes
+  #lastSeenArchiveStatus = false;
+  #lastSeenRestoreStatus = false;
 
   /**
    * Returns a reference to a Promise that will resolve with undefined once
@@ -1218,15 +1424,16 @@ export class BackupService extends EventTarget {
    * @type {object}
    */
   get state() {
-    if (!Object.keys(this.#_state.defaultParent).length) {
+    if (
+      !Object.keys(this.#_state.defaultParent).length ||
+      !this.#_state.defaultParent.path
+    ) {
       let defaultPath = BackupService.DEFAULT_PARENT_DIR_PATH;
-      if (defaultPath) {
-        this.#_state.defaultParent = {
-          path: defaultPath,
-          fileName: PathUtils.filename(defaultPath),
-          iconURL: this.getIconFromFilePath(defaultPath),
-        };
-      }
+      this.#_state.defaultParent = {
+        path: defaultPath,
+        fileName: defaultPath ? PathUtils.filename(defaultPath) : "",
+        iconURL: defaultPath ? this.getIconFromFilePath(defaultPath) : "",
+      };
     }
 
     return Object.freeze(structuredClone(this.#_state));
@@ -1632,6 +1839,7 @@ export class BackupService extends EventTarget {
             })
           );
 
+          this.stateUpdate();
           throw e;
         } finally {
           this.#backupInProgress = false;
@@ -1739,9 +1947,6 @@ export class BackupService extends EventTarget {
     await IOUtils.move(sourcePath, destPath);
 
     Services.prefs.setStringPref(LAST_BACKUP_FILE_NAME_PREF_NAME, FILENAME);
-    // It is expected that our caller will call stateUpdate(), so we skip doing
-    // that here. This is done via the backupInProgress setter in createBackup.
-    this.#_state.lastBackupFileName = FILENAME;
 
     for (let childFilePath of existingChildren) {
       let childFileName = PathUtils.filename(childFilePath);
@@ -2846,6 +3051,10 @@ export class BackupService extends EventTarget {
       return null;
     }
 
+    Glean.browserBackup.restoreStarted.record({
+      restore_id: this.#_state.restoreID,
+    });
+
     try {
       this.#_state.recoveryInProgress = true;
       this.#_state.recoveryErrorCode = 0;
@@ -2902,6 +3111,17 @@ export class BackupService extends EventTarget {
           profileRootPath,
           encState
         );
+
+        Glean.browserBackup.restoreComplete.record({
+          restore_id: this.#_state.restoreID,
+        });
+        // We are probably about to shutdown, so we want to submit this ASAP.
+        // But this will also clear out the data in this ping, which is a bit
+        // of a problem for testing. So fire off an event first that tests can
+        // listen for.
+        Services.obs.notifyObservers(null, "browser-backup-restore-complete");
+        GleanPings.profileRestore.submit();
+
         return newProfile;
       } finally {
         // If we had decrypted a backup, we would have created the temporary
@@ -2919,6 +3139,12 @@ export class BackupService extends EventTarget {
           );
         }
       }
+    } catch (ex) {
+      Glean.browserBackup.restoreFailed.record({
+        restore_id: this.#_state.restoreID,
+        error_type: errorString(ex.cause),
+      });
+      throw ex;
     } finally {
       this.#_state.recoveryInProgress = false;
       this.stateUpdate();
@@ -3166,6 +3392,24 @@ export class BackupService extends EventTarget {
         profile.rootDir.path
       );
 
+      try {
+        postRecovery.backupServiceInternal = {
+          // Indicates that this is not a result of a profile copy (which uses the
+          // same mechanism, but doesn't go through this function).
+          isProfileRestore: true,
+          restoreID: this.#_state.restoreID,
+          backupMetadata: {
+            date: this.#_state.backupFileInfo.date,
+            appName: this.#_state.backupFileInfo.appName,
+            appVersion: this.#_state.backupFileInfo.appVersion,
+            buildID: this.#_state.backupFileInfo.buildID,
+            osName: this.#_state.backupFileInfo.osName,
+            osVersion: this.#_state.backupFileInfo.osVersion,
+            legacyClientID: this.#_state.backupFileInfo.legacyClientID,
+          },
+        };
+      } catch {}
+
       await this.#maybeWriteEncryptedStateObject(
         encState,
         profile.rootDir.path
@@ -3181,14 +3425,23 @@ export class BackupService extends EventTarget {
           profileSvc.defaultProfile = profile;
         }
 
-        // let's rename the old profile with a prefix old-[profile_name]
-        profileSvc.currentProfile.name = `old-${profileSvc.currentProfile.name}`;
+        // If the profile already has an [old-] prefix, let's skip adding new prefixes
+        if (!profileSvc.currentProfile.name.startsWith("old-")) {
+          // Looks like this is a new restoration of this profile,
+          // add the prefix old-[profile_name]
+          profileSvc.currentProfile.name = `old-${profileSvc.currentProfile.name}`;
+        }
       }
 
       await profileSvc.asyncFlush();
 
       if (shouldLaunch) {
-        Services.startup.createInstanceWithProfile(profile);
+        // Launch with the user's default homepage instead of the last selected tab
+        // to avoid problems with the messaging system (see Bug 2002732)
+        Services.startup.createInstanceWithProfile(profile, [
+          "--url",
+          "about:home",
+        ]);
       }
 
       return profile;
@@ -3332,17 +3585,39 @@ export class BackupService extends EventTarget {
       let postRecovery = await IOUtils.readJSON(postRecoveryFile);
       for (let resourceKey in postRecovery) {
         let postRecoveryEntry = postRecovery[resourceKey];
-        let resourceClass = this.#resources.get(resourceKey);
-        if (!resourceClass) {
-          lazy.logConsole.error(
-            `Invalid resource for post-recovery step: ${resourceKey}`
+        if (
+          resourceKey == "backupServiceInternal" &&
+          postRecoveryEntry.isProfileRestore
+        ) {
+          Services.prefs.setStringPref(
+            RESTORED_BACKUP_METADATA_PREF_NAME,
+            JSON.stringify(postRecoveryEntry.backupMetadata)
           );
-          continue;
-        }
+          Glean.browserBackup.restoredProfileLaunched.record({
+            restore_id: postRecoveryEntry.restoreID,
+          });
+          // This will clear out the data in this ping, which is a bit of a problem
+          // for testing. So fire off an event first that tests can listen for.
+          Services.obs.notifyObservers(
+            null,
+            "browser-backup-restored-profile-telemetry-set"
+          );
+          GleanPings.postProfileRestore.submit();
+        } else {
+          let resourceClass = this.#resources.get(resourceKey);
+          if (!resourceClass) {
+            lazy.logConsole.error(
+              `Invalid resource for post-recovery step: ${resourceKey}`
+            );
+            continue;
+          }
 
-        lazy.logConsole.debug(`Running post-recovery step for ${resourceKey}`);
-        await new resourceClass().postRecovery(postRecoveryEntry);
-        lazy.logConsole.debug(`Done post-recovery step for ${resourceKey}`);
+          lazy.logConsole.debug(
+            `Running post-recovery step for ${resourceKey}`
+          );
+          await new resourceClass().postRecovery(postRecoveryEntry);
+          lazy.logConsole.debug(`Done post-recovery step for ${resourceKey}`);
+        }
       }
     } finally {
       await IOUtils.remove(postRecoveryFile, {
@@ -3361,17 +3636,20 @@ export class BackupService extends EventTarget {
    */
   setParentDirPath(parentDirPath) {
     try {
-      if (!parentDirPath || !PathUtils.filename(parentDirPath)) {
+      let filename = parentDirPath ? PathUtils.filename(parentDirPath) : null;
+      if (!filename) {
         throw new BackupError(
           "Parent directory path is invalid.",
           ERRORS.FILE_SYSTEM_ERROR
         );
       }
-      // Recreate the backups path with the new parent directory.
-      let fullPath = PathUtils.join(
-        parentDirPath,
-        BackupService.BACKUP_DIR_NAME
-      );
+
+      let fullPath = parentDirPath;
+      if (filename != BackupService.BACKUP_DIR_NAME) {
+        // Recreate the backups path with the new parent directory.
+        fullPath = PathUtils.join(parentDirPath, BackupService.BACKUP_DIR_NAME);
+      }
+
       Services.prefs.setStringPref(BACKUP_DIR_PREF_NAME, fullPath);
     } catch (e) {
       lazy.logConsole.error(
@@ -3393,6 +3671,46 @@ export class BackupService extends EventTarget {
     Glean.browserBackup.changeLocation.record();
 
     this.#_state.backupDirPath = newDirPath;
+    this.stateUpdate();
+  }
+
+  /**
+   * Updates backupErrorCode in the backup service state. Should be called every time
+   * the value for browser.backup.errorCode changes.
+   *
+   * @param {number} newErrorCode
+   *    Any of the ERROR code's from backup-constants.mjs
+   */
+  onUpdateBackupErrorCode(newErrorCode) {
+    lazy.logConsole.debug(`Updating backup error code to ${newErrorCode}`);
+
+    this.#_state.backupErrorCode = newErrorCode;
+    this.stateUpdate();
+  }
+
+  /**
+   * Updates lastBackupFileName in the backup service state. Should be called every time
+   * the value for browser.backup.scheduled.last-backup-file changes.
+   *
+   * @param {string} newLastBackupFileName
+   *    Name of the last known backup file
+   */
+  onUpdateLastBackupFileName(newLastBackupFileName) {
+    lazy.logConsole.debug(
+      `The last backup file name is being updated to ${newLastBackupFileName}`
+    );
+
+    this.#_state.lastBackupFileName = newLastBackupFileName;
+
+    if (!newLastBackupFileName) {
+      lazy.logConsole.debug(
+        `Looks like we've cleared the last backup file name, let's also clear the last backup date`
+      );
+
+      this.#_state.lastBackupDate = null;
+      Services.prefs.clearUserPref(LAST_BACKUP_TIMESTAMP_PREF_NAME);
+    }
+
     this.stateUpdate();
   }
 
@@ -3432,6 +3750,9 @@ export class BackupService extends EventTarget {
     if (shouldEnableScheduledBackups) {
       // reset the error states when reenabling backup
       Services.prefs.setIntPref(BACKUP_ERROR_CODE_PREF_NAME, ERRORS.NONE);
+
+      // flush the embedded component's persistent data
+      this.setEmbeddedComponentPersistentData({});
     } else {
       // set user-disabled pref if backup is being disabled
       Services.prefs.setBoolPref(
@@ -3739,16 +4060,8 @@ export class BackupService extends EventTarget {
       LAST_BACKUP_TIMESTAMP_PREF_NAME,
       0
     );
-    if (!lastBackupPrefValue) {
-      this.#_state.lastBackupDate = null;
-    } else {
-      this.#_state.lastBackupDate = lastBackupPrefValue;
-    }
 
-    this.#_state.lastBackupFileName = Services.prefs.getStringPref(
-      LAST_BACKUP_FILE_NAME_PREF_NAME,
-      ""
-    );
+    this.#_state.lastBackupDate = lastBackupPrefValue || null;
 
     this.stateUpdate();
 
@@ -3907,6 +4220,17 @@ export class BackupService extends EventTarget {
     }
   }
 
+  /**
+   * Makes this instance responsible for monitoring the conditions that can
+   * cause backups or restores to be unavailable.
+   *
+   * When one arrives, observers of the 'backup-service-status-changed' topic
+   * will be notified and telemetry will be emitted.
+   *
+   * This is not done by default since that would cause N emissions of that
+   * topic per change for N instances, which can be a problem with testing. The
+   * global BackupService has status observers by default.
+   */
   initStatusObservers() {
     if (this.#statusPrefObserver != null) {
       return;
@@ -3916,22 +4240,28 @@ export class BackupService extends EventTarget {
     // immediately reflect across any observers, instead of waiting on idle.
     this.#statusPrefObserver = () => {
       // Wrap in an arrow function so 'this' is preserved.
-      this.#notifyStatusObservers();
+      this.#handleStatusChange();
     };
 
-    for (let pref of BackupService.#STATUS_OBSERVER_PREFS) {
+    for (let pref of BackupService.STATUS_OBSERVER_PREFS) {
       Services.prefs.addObserver(pref, this.#statusPrefObserver);
     }
     lazy.NimbusFeatures.backupService.onUpdate(this.#statusPrefObserver);
-    this.#notifyStatusObservers();
+    this.#handleStatusChange();
   }
 
+  /**
+   * Removes the observers configured by initStatusObservers.
+   *
+   * This is done automatically on shutdown, but you can do it earlier if you'd
+   * like that instance to stop emitting events.
+   */
   uninitStatusObservers() {
     if (this.#statusPrefObserver == null) {
       return;
     }
 
-    for (let pref of BackupService.#STATUS_OBSERVER_PREFS) {
+    for (let pref of BackupService.STATUS_OBSERVER_PREFS) {
       Services.prefs.removeObserver(pref, this.#statusPrefObserver);
     }
     lazy.NimbusFeatures.backupService.offUpdate(this.#statusPrefObserver);
@@ -3939,28 +4269,81 @@ export class BackupService extends EventTarget {
   }
 
   /**
+   * Performs tasks required whenever archive or restore change their status
+   *
+   * 1. Notifies any observers that a change has taken place
+   * 2. If archive is disabled, clean up any backup files
+   */
+  #handleStatusChange() {
+    const archiveStatus = this.archiveEnabledStatus;
+    const restoreStatus = this.restoreEnabledStatus;
+    // Update the BackupService state before notifying observers about the
+    // state change
+    this.#_state.archiveEnabledStatus = this.archiveEnabledStatus.enabled;
+    this.#_state.restoreEnabledStatus = this.restoreEnabledStatus.enabled;
+
+    this.#updateGleanEnablement(archiveStatus, restoreStatus);
+    if (
+      archiveStatus.enabled != this.#lastSeenArchiveStatus ||
+      restoreStatus.enabled != this.#lastSeenRestoreStatus
+    ) {
+      this.#lastSeenArchiveStatus = archiveStatus.enabled;
+      this.#lastSeenRestoreStatus = restoreStatus.enabled;
+      this.#notifyStatusObservers();
+    }
+    if (!archiveStatus.enabled) {
+      // We won't wait for this promise to accept/reject since rejections are
+      // ignored anyways
+      this.cleanupBackupFiles();
+    }
+  }
+
+  #updateGleanEnablement(archiveStatus, restoreStatus) {
+    Glean.browserBackup.archiveEnabled.set(archiveStatus.enabled);
+    Glean.browserBackup.restoreEnabled.set(restoreStatus.enabled);
+    if (!archiveStatus.enabled) {
+      this.#wasArchivePreviouslyDisabled = true;
+      Glean.browserBackup.archiveDisabledReason.set(
+        archiveStatus.internalReason
+      );
+    } else if (this.#wasArchivePreviouslyDisabled) {
+      Glean.browserBackup.archiveDisabledReason.set("reenabled");
+    }
+    if (!restoreStatus.enabled) {
+      this.#wasRestorePreviouslyDisabled = true;
+      Glean.browserBackup.restoreDisabledReason.set(
+        restoreStatus.internalReason
+      );
+    } else if (this.#wasRestorePreviouslyDisabled) {
+      Glean.browserBackup.restoreDisabledReason.set("reenabled");
+    }
+  }
+
+  /**
    * Notify any listeners about the availability of the backup service, then
    * update relevant telemetry metrics.
    */
   #notifyStatusObservers() {
+    lazy.logConsole.log(
+      "Notifying observers about a BackupService state change"
+    );
+
     Services.obs.notifyObservers(null, "backup-service-status-updated");
+  }
 
-    let status = this.archiveEnabledStatus;
-    Glean.browserBackup.archiveEnabled.set(status.enabled);
-    if (!status.enabled) {
-      this.#wasArchivePreviouslyDisabled = true;
-      Glean.browserBackup.archiveDisabledReason.set(status.internalReason);
-    } else if (this.#wasArchivePreviouslyDisabled) {
-      Glean.browserBackup.archiveDisabledReason.set("reenabled");
-    }
-
-    status = this.restoreEnabledStatus;
-    Glean.browserBackup.restoreEnabled.set(status.enabled);
-    if (!status.enabled) {
-      this.#wasRestorePreviouslyDisabled = true;
-      Glean.browserBackup.restoreDisabledReason.set(status.internalReason);
-    } else if (this.#wasRestorePreviouslyDisabled) {
-      Glean.browserBackup.restoreDisabledReason.set("reenabled");
+  async cleanupBackupFiles() {
+    lazy.logConsole.debug("Cleaning up backup data");
+    try {
+      if (this.state.encryptionEnabled) {
+        await this.disableEncryption();
+      }
+      this.deleteLastBackup();
+    } catch (e) {
+      // Ignore any exceptions
+      lazy.logConsole.error(
+        "There was an error when cleaning up backup files: ",
+        e
+      );
     }
   }
 
@@ -3979,14 +4362,14 @@ export class BackupService extends EventTarget {
    * not been sent to the application for at least
    * IDLE_THRESHOLD_SECONDS_PREF_NAME seconds.
    */
-  onIdle() {
+  async onIdle() {
     lazy.logConsole.debug("Saw idle callback");
     if (!this.#takenMeasurements) {
       this.takeMeasurements();
       this.#takenMeasurements = true;
     }
 
-    if (lazy.scheduledBackupsPref) {
+    if (lazy.scheduledBackupsPref && this.archiveEnabledStatus.enabled) {
       lazy.logConsole.debug("Scheduled backups enabled.");
       let now = Math.floor(Date.now() / 1000);
       let lastBackupDate = this.#_state.lastBackupDate;
@@ -4025,12 +4408,19 @@ export class BackupService extends EventTarget {
         // loop in the parent process isn't so busy with higher priority things.
         let expectedBackupTime =
           lastBackupDate + lazy.minimumTimeBetweenBackupsSeconds;
-        this.createBackupOnIdleDispatch({
-          reason:
-            expectedBackupTime < this._startupTimeUnixSeconds
-              ? "missed"
-              : "idle",
-        });
+        try {
+          await this.createBackupOnIdleDispatch({
+            reason:
+              expectedBackupTime < this._startupTimeUnixSeconds
+                ? "missed"
+                : "idle",
+          });
+        } catch (e) {
+          lazy.logConsole.error(
+            "createBackupOnIdleDispatch promise rejected",
+            e
+          );
+        }
       } else {
         lazy.logConsole.debug(
           "Last backup was too recent. Not creating one for now."
@@ -4054,10 +4444,11 @@ export class BackupService extends EventTarget {
    * is not busy with higher priority events. This is intentionally broken out
    * into its own method to make it easier to stub out in tests.
    *
-   * @param {...*} args
-   *   Arguments to pass through to createBackup.
+   * @param {object} [options]
+   * @param {boolean} [options.deletePreviousBackup]
+   * @param {string} [options.reason]
    */
-  createBackupOnIdleDispatch(...args) {
+  createBackupOnIdleDispatch({ deletePreviousBackup = true, reason }) {
     let now = Math.floor(Date.now() / 1000);
     let errorStateDebugInfo = Services.prefs.getStringPref(
       BACKUP_DEBUG_INFO_PREF_NAME,
@@ -4076,15 +4467,27 @@ export class BackupService extends EventTarget {
       lazy.logConsole.debug(
         `We've already retried in the last ${lazy.minimumTimeBetweenBackupsSeconds}s. Waiting for next valid idleDispatch to try again.`
       );
-      return;
+      return Promise.resolve();
     }
+    // Determine path to old backup file
+    const oldBackupFile = this.#_state.lastBackupFileName;
+    const isScheduledBackupsEnabled = lazy.scheduledBackupsPref;
 
-    ChromeUtils.idleDispatch(() => {
+    let { backupPromise, resolve } = Promise.withResolvers();
+    ChromeUtils.idleDispatch(async () => {
       lazy.logConsole.debug(
         "idleDispatch fired. Attempting to create a backup."
       );
+      let oldBackupFilePath;
+      if (await this.#infalliblePathExists(lazy.backupDirPref)) {
+        oldBackupFilePath = PathUtils.join(lazy.backupDirPref, oldBackupFile);
+      }
 
-      this.createBackup(...args).catch(e => {
+      try {
+        if (isScheduledBackupsEnabled) {
+          await this.createBackup({ reason });
+        }
+      } catch (e) {
         lazy.logConsole.debug(
           `There was an error creating backup on idle dispatch: ${e}`
         );
@@ -4095,8 +4498,22 @@ export class BackupService extends EventTarget {
           Services.prefs.setBoolPref(DISABLED_ON_IDLE_RETRY_PREF_NAME, true);
           Glean.browserBackup.backupThrottled.record();
         }
-      });
+      } finally {
+        // Now delete the old backup file, if it exists
+        if (deletePreviousBackup && oldBackupFilePath) {
+          lazy.logConsole.log(
+            "Attempting to delete last backup file at ",
+            oldBackupFilePath
+          );
+          await IOUtils.remove(oldBackupFilePath, {
+            ignoreAbsent: true,
+            retryReadonly: true,
+          });
+          resolve();
+        }
+      }
     });
+    return backupPromise;
   }
 
   /**
@@ -4154,6 +4571,13 @@ export class BackupService extends EventTarget {
    */
   async getBackupFileInfo(backupFilePath) {
     lazy.logConsole.debug(`Getting info from backup file at ${backupFilePath}`);
+
+    this.#_state.restoreID = Services.uuid.generateUUID().toString();
+    this.#_state.backupFileInfo = null;
+    this.#_state.backupFileToRestore = backupFilePath;
+    this.#_state.backupFileCoarseLocation =
+      this.classifyLocationForTelemetry(backupFilePath);
+
     try {
       let { archiveJSON, isEncrypted } =
         await this.sampleArchive(backupFilePath);
@@ -4161,25 +4585,27 @@ export class BackupService extends EventTarget {
         isEncrypted,
         date: archiveJSON?.meta?.date,
         deviceName: archiveJSON?.meta?.deviceName,
+        appName: archiveJSON?.meta?.appName,
+        appVersion: archiveJSON?.meta?.appVersion,
+        buildID: archiveJSON?.meta?.buildID,
+        osName: archiveJSON?.meta?.osName,
+        osVersion: archiveJSON?.meta?.osVersion,
+        healthTelemetryEnabled: archiveJSON?.meta?.healthTelemetryEnabled,
+        legacyClientID: archiveJSON?.meta?.legacyClientID,
       };
-      this.#_state.backupFileToRestore = backupFilePath;
-      // Clear any existing recovery error from state since we've successfully got our file info
+
+      // Clear any existing recovery error from state since we've successfully
+      // got our file info. Make sure to do this last, since it will cause
+      // state change observers to fire.
       this.setRecoveryError(ERRORS.NONE);
     } catch (error) {
-      this.setRecoveryError(error.cause);
       // Nullify the file info when we catch errors that indicate the file is invalid
-      switch (error.cause) {
-        case ERRORS.FILE_SYSTEM_ERROR:
-        case ERRORS.CORRUPTED_ARCHIVE:
-        case ERRORS.UNSUPPORTED_BACKUP_VERSION:
-          this.#_state.backupFileInfo = null;
-          this.#_state.backupFileToRestore = null;
-          break;
-        default:
-          break;
-      }
+      this.#_state.backupFileInfo = null;
+      this.#_state.backupFileToRestore = null;
+
+      // Notify observers of the error last, after we have set the state.
+      this.setRecoveryError(error.cause);
     }
-    this.stateUpdate();
   }
 
   /**
@@ -4207,7 +4633,7 @@ export class BackupService extends EventTarget {
   async showBackupLocation() {
     let backupFilePath = PathUtils.join(
       lazy.backupDirPref,
-      this.#_state.lastBackupFileName
+      lazy.lastBackupFileName
     );
     if (await IOUtils.exists(backupFilePath)) {
       new lazy.nsLocalFile(backupFilePath).reveal();
@@ -4241,7 +4667,7 @@ export class BackupService extends EventTarget {
     speedUpHeuristic = false,
   } = {}) {
     // Do we already have a backup for this browser? if so, we don't need to do any searching!
-    if (this.#_state.lastBackupFileName) {
+    if (lazy.lastBackupFileName) {
       return {
         found: true,
         multipleBackupsFound: false,
@@ -4249,9 +4675,19 @@ export class BackupService extends EventTarget {
     }
 
     try {
-      let files = await IOUtils.getChildren(this.#_state.backupDirPath, {
-        ignoreAbsent: true,
-      });
+      // During the first startup, the browser's backup location is often left
+      // unconfigured; therefore, it defaults to predefined locations to look
+      // for existing backup files.
+      let defaultPath = PathUtils.join(
+        BackupService.DEFAULT_PARENT_DIR_PATH,
+        BackupService.BACKUP_DIR_NAME
+      );
+      let files = await IOUtils.getChildren(
+        this.#_state.backupDirPath ? this.#_state.backupDirPath : defaultPath,
+        {
+          ignoreAbsent: true,
+        }
+      );
       // filtering is an O(N) operation, we can return early if there's too many files
       // in this folder to filter to avoid a performance bottleneck
       if (speedUpHeuristic && files && files.length > 1000) {
@@ -4369,7 +4805,6 @@ export class BackupService extends EventTarget {
     validateFile = false,
     multipleFiles = false,
   } = {}) {
-    this.#_state.lastBackupFileName = "";
     this.#_state.backupFileToRestore = null;
 
     let { multipleBackupsFound } = await this.findIfABackupFileExists({
@@ -4456,11 +4891,11 @@ export class BackupService extends EventTarget {
       BackupService.WRITE_BACKUP_LOCK_NAME,
       { signal: this.#backupWriteAbortController.signal },
       async () => {
-        if (this.#_state.lastBackupFileName) {
+        if (lazy.lastBackupFileName) {
           if (await this.#infalliblePathExists(lazy.backupDirPref)) {
             let backupFilePath = PathUtils.join(
               lazy.backupDirPref,
-              this.#_state.lastBackupFileName
+              lazy.lastBackupFileName
             );
 
             lazy.logConsole.log(
@@ -4473,13 +4908,7 @@ export class BackupService extends EventTarget {
             });
           }
 
-          this.#_state.lastBackupDate = null;
-          Services.prefs.clearUserPref(LAST_BACKUP_TIMESTAMP_PREF_NAME);
-
-          this.#_state.lastBackupFileName = "";
           Services.prefs.clearUserPref(LAST_BACKUP_FILE_NAME_PREF_NAME);
-
-          this.stateUpdate();
         } else {
           lazy.logConsole.log(
             "Not deleting last backup file, since none is known about."

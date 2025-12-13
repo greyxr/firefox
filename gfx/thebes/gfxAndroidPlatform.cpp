@@ -77,7 +77,7 @@ NS_IMPL_ISUPPORTS(FreetypeReporter, nsIMemoryReporter)
 static FT_MemoryRec_ sFreetypeMemoryRecord;
 
 PRThread* gfxAndroidPlatform::sFontAPIInitializeThread = nullptr;
-MOZ_CONSTINIT nsCString gfxAndroidPlatform::sManufacturer;
+constinit nsCString gfxAndroidPlatform::sManufacturer;
 
 // static
 bool gfxAndroidPlatform::IsFontAPIDisabled(bool aDontCheckPref) {
@@ -158,10 +158,6 @@ gfxAndroidPlatform::gfxAndroidPlatform() {
   int32_t screenDepth = 0;
   mOffscreenFormat = screenDepth == 16 ? SurfaceFormat::R5G6B5_UINT16
                                        : SurfaceFormat::X8R8G8B8_UINT32;
-
-  if (StaticPrefs::gfx_android_rgb16_force_AtStartup()) {
-    mOffscreenFormat = SurfaceFormat::R5G6B5_UINT16;
-  }
 }
 
 gfxAndroidPlatform::~gfxAndroidPlatform() {

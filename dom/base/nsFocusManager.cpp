@@ -39,6 +39,7 @@
 #include "mozilla/dom/HTMLImageElement.h"
 #include "mozilla/dom/HTMLInputElement.h"
 #include "mozilla/dom/HTMLSlotElement.h"
+#include "mozilla/dom/Navigation.h"
 #include "mozilla/dom/Selection.h"
 #include "mozilla/dom/Text.h"
 #include "mozilla/dom/WindowGlobalChild.h"
@@ -913,6 +914,15 @@ void nsFocusManager::ContentAppended(nsIContent* aFirstNewContent,
 static void UpdateFocusWithinState(Element* aElement,
                                    nsIContent* aCommonAncestor,
                                    bool aGettingFocus) {
+  Element* focusedElement = nullptr;
+  Document* document = aElement->GetComposedDoc();
+  if (aElement && document) {
+    if (nsPIDOMWindowOuter* window = document->GetWindow()) {
+      focusedElement = window->GetFocusedElement();
+    }
+  }
+
+  bool focusChanged = false;
   for (nsIContent* content = aElement; content && content != aCommonAncestor;
        content = content->GetFlattenedTreeParent()) {
     Element* element = Element::FromNode(content);
@@ -924,9 +934,20 @@ static void UpdateFocusWithinState(Element* aElement,
       if (element->State().HasState(ElementState::FOCUS_WITHIN)) {
         break;
       }
+
       element->AddStates(ElementState::FOCUS_WITHIN);
     } else {
       element->RemoveStates(ElementState::FOCUS_WITHIN);
+    }
+
+    focusChanged = focusChanged || element == focusedElement;
+  }
+
+  if (focusChanged && document->GetInnerWindow()) {
+    if (RefPtr<Navigation> navigation =
+            document->GetInnerWindow()->Navigation()) {
+      navigation->SetFocusedChangedDuringOngoingNavigation(
+          /* aFocusChangedDuringOngoingNavigation */ true);
     }
   }
 }
@@ -2279,32 +2300,6 @@ Element* nsFocusManager::FlushAndCheckIfFocusable(Element* aElement,
   // also initialized in case we come from a script calling focus() early.
   mEventHandlingNeedsFlush = false;
   doc->FlushPendingNotifications(FlushType::EnsurePresShellInitAndFrames);
-
-  PresShell* presShell = doc->GetPresShell();
-  if (!presShell) {
-    return nullptr;
-  }
-
-  // If this is an iframe that doesn't have an in-process subdocument, it is
-  // either an OOP iframe or an in-process iframe without lazy about:blank
-  // creation having taken place. In the OOP case, iframe is always focusable.
-  // In the in-process case, create the initial about:blank for in-process
-  // BrowsingContexts in order to have the `GetSubDocumentFor` call after this
-  // block return something.
-  //
-  // TODO(emilio): This block can probably go after bug 543435 lands.
-  if (RefPtr<nsFrameLoaderOwner> flo = do_QueryObject(aElement)) {
-    if (!aElement->IsXULElement()) {
-      // Only look at pre-existing browsing contexts. If this function is
-      // called during reflow, calling GetBrowsingContext() could cause frame
-      // loader initialization at a time when it isn't safe.
-      if (BrowsingContext* bc = flo->GetExtantBrowsingContext()) {
-        // This call may create a documentViewer-created about:blank.
-        // That's intentional, so we can move focus there.
-        (void)bc->GetDocument();
-      }
-    }
-  }
 
   return GetTheFocusableArea(aElement, aFlags);
 }

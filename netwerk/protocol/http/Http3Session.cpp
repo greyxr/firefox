@@ -439,6 +439,11 @@ nsresult Http3Session::ProcessInput(nsIUDPSocket* socket) {
   LOG(("Http3Session::ProcessInput writer=%p [this=%p state=%d]",
        mUdpConn.get(), this, mState));
 
+  if (!socket || socket->IsSocketClosed()) {
+    MOZ_DIAGNOSTIC_ASSERT(false, "UDP socket should still be open");
+    return NS_ERROR_UNEXPECTED;
+  }
+
   if (mUseNSPRForIO) {
     while (true) {
       nsTArray<uint8_t> data;
@@ -584,6 +589,7 @@ nsresult Http3Session::ProcessEvents() {
 
         if (stream) {
           StreamReadyToWrite(stream);
+          stream->SetBlockedByFlowControl(false);
         }
       } break;
       case Http3Event::Tag::Reset:
@@ -1091,6 +1097,11 @@ nsresult Http3Session::ProcessOutput(nsIUDPSocket* socket) {
   LOG(("Http3Session::ProcessOutput reader=%p, [this=%p]", mUdpConn.get(),
        this));
 
+  if (!socket || socket->IsSocketClosed()) {
+    MOZ_DIAGNOSTIC_ASSERT(false, "UDP socket should still be open");
+    return NS_ERROR_UNEXPECTED;
+  }
+
   if (mUseNSPRForIO) {
     mSocket = socket;
     nsresult rv = mHttp3Connection->ProcessOutputAndSendUseNSPRForIO(
@@ -1428,7 +1439,7 @@ void Http3Session::RemoveStreamFromQueues(Http3StreamBase* aStream) {
 // calls Http3Stream::OnReadSegment.
 nsresult Http3Session::TryActivating(
     const nsACString& aMethod, const nsACString& aScheme,
-    const nsACString& aAuthorityHeader, const nsACString& aPath,
+    const nsACString& aAuthorityHeader, const nsACString& aPathQuery,
     const nsACString& aHeaders, uint64_t* aStreamId, Http3StreamBase* aStream) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   MOZ_ASSERT(*aStreamId == UINT64_MAX);
@@ -1451,7 +1462,13 @@ nsresult Http3Session::TryActivating(
 
   if (mState == ZERORTT) {
     if (!aStream->Do0RTT()) {
-      MOZ_ASSERT(!mCannotDo0RTTStreams.Contains(aStream));
+      // Stream can't do 0RTT - queue it for activation when the session
+      // reaches CONNECTED state via Finish0Rtt.
+      if (!mCannotDo0RTTStreams.Contains(aStream)) {
+        LOG(("Http3Session %p queuing stream %p for post-0RTT activation", this,
+             aStream));
+        mCannotDo0RTTStreams.AppendElement(aStream);
+      }
       return NS_BASE_STREAM_WOULD_BLOCK;
     }
   }
@@ -1466,15 +1483,15 @@ nsresult Http3Session::TryActivating(
                                    false);
   } else if (RefPtr<Http3Stream> httpStream = aStream->GetHttp3Stream()) {
     rv = mHttp3Connection->Fetch(
-        aMethod, aScheme, aAuthorityHeader, aPath, aHeaders, aStreamId,
+        aMethod, aScheme, aAuthorityHeader, aPathQuery, aHeaders, aStreamId,
         httpStream->PriorityUrgency(), httpStream->PriorityIncremental());
   } else if (RefPtr<Http3ConnectUDPStream> udpStream =
                  aStream->GetHttp3ConnectUDPStream()) {
     if (DeferIfNegotiating(ExtendedConnectKind::ConnectUDP, aStream)) {
       return NS_BASE_STREAM_WOULD_BLOCK;
     }
-    rv = mHttp3Connection->CreateConnectUdp(aAuthorityHeader, aPath, aHeaders,
-                                            aStreamId);
+    rv = mHttp3Connection->CreateConnectUdp(aAuthorityHeader, aPathQuery,
+                                            aHeaders, aStreamId);
   } else {
     MOZ_RELEASE_ASSERT(aStream->GetHttp3WebTransportSession(),
                        "It must be a WebTransport session");
@@ -1483,8 +1500,8 @@ nsresult Http3Session::TryActivating(
     if (DeferIfNegotiating(ExtendedConnectKind::WebTransport, aStream)) {
       return NS_BASE_STREAM_WOULD_BLOCK;
     }
-    rv = mHttp3Connection->CreateWebTransport(aAuthorityHeader, aPath, aHeaders,
-                                              aStreamId);
+    rv = mHttp3Connection->CreateWebTransport(aAuthorityHeader, aPathQuery,
+                                              aHeaders, aStreamId);
   }
 
   if (NS_FAILED(rv)) {
@@ -1503,9 +1520,15 @@ nsresult Http3Session::TryActivating(
       QueueStream(aStream);
       return rv;
     }
-    // Ignore this error. This may happen if some events are not handled yet.
-    // TODO we may try to add an assertion here.
-    return NS_OK;
+
+    // Previously we always returned NS_OK here, which caused the
+    // transaction to wait until the quic connection timed out
+    // after which it was retried without quic.
+    if (StaticPrefs::network_http_http3_fallback_to_h2_on_error()) {
+      return NS_ERROR_HTTP2_FALLBACK_TO_HTTP1;
+    }
+
+    return rv;
   }
 
   LOG(("Http3Session::TryActivating streamId=0x%" PRIx64
@@ -1807,11 +1830,18 @@ nsresult Http3Session::SendData(nsIUDPSocket* socket) {
   nsresult rv = NS_OK;
   RefPtr<Http3StreamBase> stream;
 
+  nsTArray<RefPtr<Http3StreamBase>> blockedStreams;
+
   // Step 1)
   while (CanSendData() && (stream = mReadyForWrite.PopFront())) {
     LOG(("Http3Session::SendData call ReadSegments from stream=%p [this=%p]",
          stream.get(), this));
     stream->SetInTxQueue(false);
+    if (stream->BlockedByFlowControl()) {
+      LOG(("stream %p blocked by flow control", stream.get()));
+      blockedStreams.AppendElement(stream);
+      continue;
+    }
     rv = stream->ReadSegments();
 
     // on stream error we return earlier to let the error be handled.
@@ -1847,6 +1877,13 @@ nsresult Http3Session::SendData(nsIUDPSocket* socket) {
   if (NS_FAILED(rv)) {
     return rv;
   }
+
+  // Put the blocked streams back to the queue, since they are ready to write.
+  for (const auto& stream : blockedStreams) {
+    mReadyForWrite.Push(stream);
+    stream->SetInTxQueue(true);
+  }
+
   rv = ProcessEvents();
 
   // Let the connection know we sent some app data successfully.

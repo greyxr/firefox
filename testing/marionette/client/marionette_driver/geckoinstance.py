@@ -50,12 +50,6 @@ class GeckoInstance:
         "browser.http.blank_page_with_error_response.enabled": True,
         # Disable CFR features for automated tests.
         "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features": False,
-        # Don't pull weather data from the network
-        "browser.newtabpage.activity-stream.discoverystream.region-weather-config": "",
-        # Don't pull wallpaper content from the network
-        "browser.newtabpage.activity-stream.newtabWallpapers.enabled": False,
-        # Remove once Firefox 140 is no longer supported (see bug 1902921)
-        "browser.newtabpage.activity-stream.newtabWallpapers.v2.enabled": False,
         # Don't pull sponsored Top Sites content from the network
         "browser.newtabpage.activity-stream.showSponsoredTopSites": False,
         # Disable geolocation ping (#1)
@@ -526,7 +520,7 @@ class FennecInstance(GeckoInstance):
         required_prefs = deepcopy(FennecInstance.fennec_prefs)
         required_prefs.update(kwargs.get("prefs", {}))
 
-        super(FennecInstance, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.required_prefs.update(required_prefs)
 
         self.runner_class = FennecEmulatorRunner
@@ -608,7 +602,7 @@ class FennecInstance(GeckoInstance):
 
         :param clean: If True, also perform runner cleanup.
         """
-        super(FennecInstance, self).close(clean)
+        super().close(clean)
         if clean and self.runner and self.runner.device.connected:
             try:
                 self.runner.device.device.remove_forwards(f"tcp:{self.marionette_port}")
@@ -646,10 +640,8 @@ class DesktopInstance(GeckoInstance):
         "browser.EULA.override": True,
         # Disable all machine learning features by default
         "browser.ml.enable": False,
-        # Disable Activity Stream telemetry pings
-        "browser.newtabpage.activity-stream.telemetry": False,
-        # Always display a blank page
-        "browser.newtabpage.enabled": False,
+        # Do not initialize any activitystream features
+        "browser.newtabpage.activity-stream.testing.shouldInitializeFeeds": False,
         # Background thumbnails in particular cause grief, and disabling thumbnails
         # in general can"t hurt - we re-enable them when tests need them
         "browser.pagethumbnails.capturing_disabled": True,
@@ -709,13 +701,13 @@ class DesktopInstance(GeckoInstance):
         required_prefs = deepcopy(DesktopInstance.desktop_prefs)
         required_prefs.update(kwargs.get("prefs", {}))
 
-        super(DesktopInstance, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.required_prefs.update(required_prefs)
 
 
 class ThunderbirdInstance(GeckoInstance):
     def __init__(self, *args, **kwargs):
-        super(ThunderbirdInstance, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         try:
             # Copied alongside in the test archive
             from .thunderbirdinstance import thunderbird_prefs

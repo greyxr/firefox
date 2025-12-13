@@ -149,6 +149,7 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
       this.refreshTopicSelectionCache.bind(this);
     this.handleSectionsToggle = this.handleSectionsToggle.bind(this);
     this.toggleIABBanners = this.toggleIABBanners.bind(this);
+    this.sendConversionEvent = this.sendConversionEvent.bind(this);
     this.state = {
       toggledStories: {},
       weatherQuery: "",
@@ -352,9 +353,20 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
     this.props.dispatch(
       ac.SetPref("discoverystream.sections.cards.enabled", pressed)
     );
-    this.props.dispatch(
-      ac.SetPref("discoverystream.sections.cards.thumbsUpDown.enabled", pressed)
-    );
+  }
+
+  sendConversionEvent() {
+    const detail = {
+      partnerId: "demo-partner",
+      lookbackDays: 7,
+      impressionType: "default",
+    };
+    const event = new CustomEvent("FirefoxConversionNotification", {
+      detail,
+      bubbles: true,
+      composed: true,
+    });
+    window?.dispatchEvent(event);
   }
 
   renderComponent(width, component) {
@@ -706,6 +718,9 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
             />
           </div>
         </details>
+        <button className="button" onClick={this.sendConversionEvent}>
+          Send conversion event
+        </button>
         <table>
           <tbody>
             {prefToggles.map(pref => (

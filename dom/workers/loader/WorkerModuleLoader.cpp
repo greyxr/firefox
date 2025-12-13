@@ -128,6 +128,11 @@ bool WorkerModuleLoader::IsDynamicImportSupported() {
   return !workerPrivate->IsServiceWorker();
 }
 
+bool WorkerModuleLoader::IsForServiceWorker() const {
+  WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+  return workerPrivate && workerPrivate->IsServiceWorker();
+}
+
 bool WorkerModuleLoader::CanStartLoad(ModuleLoadRequest* aRequest,
                                       nsresult* aRvOut) {
   return true;
@@ -147,8 +152,9 @@ nsresult WorkerModuleLoader::CompileFetchedModule(
     case JS::ModuleType::Unknown:
     case JS::ModuleType::Bytes:
       MOZ_CRASH("Unexpected module type");
-    case JS::ModuleType::JavaScript:
-      return CompileJavaScriptModule(aCx, aOptions, aRequest, aModuleScript);
+    case JS::ModuleType::JavaScriptOrWasm:
+      return CompileJavaScriptOrWasmModule(aCx, aOptions, aRequest,
+                                           aModuleScript);
     case JS::ModuleType::JSON:
       return CompileJsonModule(aCx, aOptions, aRequest, aModuleScript);
     case JS::ModuleType::CSS:
@@ -158,7 +164,7 @@ nsresult WorkerModuleLoader::CompileFetchedModule(
   MOZ_CRASH("Unhandled module type");
 }
 
-nsresult WorkerModuleLoader::CompileJavaScriptModule(
+nsresult WorkerModuleLoader::CompileJavaScriptOrWasmModule(
     JSContext* aCx, JS::CompileOptions& aOptions, ModuleLoadRequest* aRequest,
     JS::MutableHandle<JSObject*> aModuleScript) {
   MOZ_ASSERT(aRequest->IsTextSource());
@@ -166,6 +172,22 @@ nsresult WorkerModuleLoader::CompileJavaScriptModule(
   nsresult rv = aRequest->GetScriptSource(aCx, &maybeSource,
                                           aRequest->mLoadContext.get());
   NS_ENSURE_SUCCESS(rv, rv);
+
+#ifdef NIGHTLY_BUILD
+  if (aRequest->HasWasmMimeTypeEssence()) {
+    auto compile = [&](auto& source) {
+      return JS::CompileWasmModule(aCx, aOptions, source);
+    };
+
+    auto* wasmModule = maybeSource.mapNonEmpty(compile);
+    if (!wasmModule) {
+      return NS_ERROR_FAILURE;
+    }
+
+    aModuleScript.set(wasmModule);
+    return NS_OK;
+  }
+#endif
 
   RefPtr<JS::Stencil> stencil;
 

@@ -1342,6 +1342,15 @@ InterceptedHttpChannel::IsFromCache(bool* value) {
 }
 
 NS_IMETHODIMP
+InterceptedHttpChannel::HasCacheEntry(bool* value) {
+  if (mSynthesizedCacheInfo) {
+    return mSynthesizedCacheInfo->HasCacheEntry(value);
+  }
+  *value = false;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
 InterceptedHttpChannel::IsRacing(bool* value) {
   if (mSynthesizedCacheInfo) {
     return mSynthesizedCacheInfo->IsRacing(value);
@@ -1469,6 +1478,15 @@ NS_IMETHODIMP
 InterceptedHttpChannel::GetAlternativeDataType(nsACString& aType) {
   if (mSynthesizedCacheInfo) {
     return mSynthesizedCacheInfo->GetAlternativeDataType(aType);
+  }
+  return NS_ERROR_NOT_AVAILABLE;
+}
+
+NS_IMETHODIMP
+InterceptedHttpChannel::GetCacheEntryWriteHandle(
+    nsICacheEntryWriteHandle** _retval) {
+  if (mSynthesizedCacheInfo) {
+    return mSynthesizedCacheInfo->GetCacheEntryWriteHandle(_retval);
   }
   return NS_ERROR_NOT_AVAILABLE;
 }

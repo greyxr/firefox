@@ -108,7 +108,7 @@ def filter_for_repo_type(task, parameters):
 
     This filter is temporarily in-place to facilitate the hg.mozilla.org ->
     Github migration."""
-    run_on_repo_types = set(task.attributes.get("run_on_repo_type", ["hg"]))
+    run_on_repo_types = set(task.attributes.get("run_on_repo_type", ["git", "hg"]))
     return match_run_on_repo_type(parameters["repository_type"], run_on_repo_types)
 
 
@@ -768,6 +768,9 @@ def target_tasks_general_perf_testing(full_task_graph, parameters, graph_config)
                 # Disabled chrome responsiveness tests temporarily in bug 1898351
                 # due to frequent failures
                 return False
+            # Bug 1961141 - Disable unity webgl for chrome windows
+            if "chrome-unity-webgl" in try_name and "windows11" in platform:
+                return False
             # Bug 1961145 - Disable bing-search for test-windows11-64-24h2-shippable
             if "windows11" in platform and "bing-search" in try_name:
                 return False
@@ -795,7 +798,8 @@ def target_tasks_general_perf_testing(full_task_graph, parameters, graph_config)
                         "safari-jetstream3" in try_name
                         and "macosx1500-aarch64" in platform
                     ):
-                        return True
+                        return False
+                    return True
         # Android selection
         elif accept_raptor_android_build(platform):
             if "hw-s24" in platform and "speedometer3" not in try_name:

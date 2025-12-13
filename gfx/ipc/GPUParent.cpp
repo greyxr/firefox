@@ -33,7 +33,6 @@
 #include "mozilla/ProcessPriorityManager.h"
 #include "mozilla/RemoteMediaManagerChild.h"
 #include "mozilla/RemoteMediaManagerParent.h"
-#include "mozilla/ScopeExit.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPrefs_media.h"
 #include "mozilla/TimeStamp.h"
@@ -47,7 +46,6 @@
 #include "mozilla/ipc/CrashReporterClient.h"
 #include "mozilla/ipc/ProcessChild.h"
 #include "mozilla/ipc/ProcessUtils.h"
-#include "mozilla/layers/APZInputBridgeParent.h"
 #include "mozilla/layers/APZPublicUtils.h"  // for apz::InitializeGlobalState
 #include "mozilla/layers/APZThreadUtils.h"
 #include "mozilla/layers/CompositorBridgeParent.h"
@@ -56,7 +54,6 @@
 #include "mozilla/layers/ImageBridgeParent.h"
 #include "mozilla/layers/LayerTreeOwnerTracker.h"
 #include "mozilla/layers/RemoteTextureMap.h"
-#include "mozilla/layers/UiCompositorControllerParent.h"
 #include "mozilla/layers/VideoBridgeParent.h"
 #include "mozilla/webrender/RenderThread.h"
 #include "mozilla/webrender/WebRenderAPI.h"
@@ -233,23 +230,6 @@ bool GPUParent::Init(mozilla::ipc::UntypedEndpoint&& aEndpoint,
 
 void GPUParent::NotifyDeviceReset(DeviceResetReason aReason,
                                   DeviceResetDetectPlace aPlace) {
-  if (!NS_IsMainThread()) {
-    NS_DispatchToMainThread(NS_NewRunnableFunction(
-        "gfx::GPUParent::NotifyDeviceReset", [aReason, aPlace]() -> void {
-          GPUParent::GetSingleton()->NotifyDeviceReset(aReason, aPlace);
-        }));
-    return;
-  }
-
-  // Reset and reinitialize the compositor devices
-#ifdef XP_WIN
-  if (!DeviceManagerDx::Get()->MaybeResetAndReacquireDevices()) {
-    // If the device doesn't need to be reset then the device
-    // has already been reset by a previous NotifyDeviceReset message.
-    return;
-  }
-#endif
-
   // Notify the main process that there's been a device reset
   // and that they should reset their compositors and repaint
   GPUDeviceData data;
@@ -293,7 +273,8 @@ void GPUParent::NotifyDisableRemoteCanvas() {
 mozilla::ipc::IPCResult GPUParent::RecvInit(
     nsTArray<GfxVarUpdate>&& vars, const DevicePrefs& devicePrefs,
     nsTArray<LayerTreeIdMapping>&& aMappings,
-    nsTArray<GfxInfoFeatureStatus>&& aFeatures, uint32_t aWrNamespace) {
+    nsTArray<GfxInfoFeatureStatus>&& aFeatures, uint32_t aWrNamespace,
+    InitResolver&& aInitResolver) {
   gfxVars::ApplyUpdate(vars);
 
   // Inherit device preferences.
@@ -414,7 +395,7 @@ mozilla::ipc::IPCResult GPUParent::RecvInit(
   // Send a message to the UI process that we're done.
   GPUDeviceData data;
   RecvGetDeviceStatus(&data);
-  (void)SendInitComplete(data);
+  aInitResolver(data);
 
   // Dispatch a task to background thread to determine the media codec supported
   // result, and propagate it back to the chrome process on the main thread.
@@ -486,20 +467,6 @@ mozilla::ipc::IPCResult GPUParent::RecvInitVRManager(
 mozilla::ipc::IPCResult GPUParent::RecvInitVR(
     Endpoint<PVRGPUChild>&& aEndpoint) {
   gfx::VRGPUChild::InitForGPUProcess(std::move(aEndpoint));
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult GPUParent::RecvInitUiCompositorController(
-    const LayersId& aRootLayerTreeId,
-    Endpoint<PUiCompositorControllerParent>&& aEndpoint) {
-  UiCompositorControllerParent::Start(aRootLayerTreeId, std::move(aEndpoint));
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult GPUParent::RecvInitAPZInputBridge(
-    const LayersId& aRootLayerTreeId,
-    Endpoint<PAPZInputBridgeParent>&& aEndpoint) {
-  APZInputBridgeParent::Create(aRootLayerTreeId, std::move(aEndpoint));
   return IPC_OK();
 }
 

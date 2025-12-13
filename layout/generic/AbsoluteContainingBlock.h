@@ -57,6 +57,9 @@ class AbsoluteContainingBlock {
   }
 
   const nsFrameList& GetChildList() const { return mAbsoluteFrames; }
+  const nsFrameList& GetPushedChildList() const {
+    return mPushedAbsoluteFrames;
+  }
 
   void SetInitialChildList(nsIFrame* aDelegatingFrame, FrameChildListID aListID,
                            nsFrameList&& aChildList);
@@ -67,6 +70,30 @@ class AbsoluteContainingBlock {
   void RemoveFrame(FrameDestroyContext&, FrameChildListID, nsIFrame*);
 
   /**
+   * Return the pushed absolute frames. The caller is responsible for passing
+   * the ownership of the frames to someone else, or destroying them.
+   */
+  [[nodiscard]] nsFrameList StealPushedChildList();
+
+  /**
+   * Prepare our absolute child list so that it is ready to reflow by moving all
+   * the pushed absolute frames in aDelegatingFrame's prev-in-flow's absCB, and
+   * some in our own pushed absolute child list, to our absolute child list.
+   *
+   * @return true if we have absolute frames after we return.
+   */
+  bool PrepareAbsoluteFrames(nsContainerFrame* aDelegatingFrame);
+
+  /**
+   * Return true if we have absolute frames.
+   *
+   * Note: During reflow, consider calling PrepareAbsoluteFrames() rather than
+   * this method; it moves absolute frames from other lists to mAbsoluteFrames,
+   * which may be needed to get the correct result.
+   */
+  bool HasAbsoluteFrames() const { return mAbsoluteFrames.NotEmpty(); }
+
+  /**
    * Called by the delegating frame after it has done its reflow first. This
    * function will reflow any absolutely positioned child frames that need to
    * be reflowed, e.g., because the absolutely positioned child frame has
@@ -75,10 +102,12 @@ class AbsoluteContainingBlock {
    * @param aOverflowAreas, if non-null, is unioned with (in the local
    * coordinate space) the overflow areas of the absolutely positioned
    * children.
-   *
    * @param aReflowStatus This function merges in the statuses of the absolutely
    * positioned children's reflows.
-   *
+   * @param aContainingBlock Rect representing the area where absolute
+   * positioned children can be positioned. Generally, this is the padding rect
+   * of `aDelegatingFrame` (Which would not have a valid mRect set during
+   * reflow), offset against the `aDelegatingFrame`'s border rect.
    * @param aFlags zero or more AbsPosReflowFlags
    */
   void Reflow(nsContainerFrame* aDelegatingFrame, nsPresContext* aPresContext,
@@ -88,8 +117,6 @@ class AbsoluteContainingBlock {
 
   using DestroyContext = nsIFrame::DestroyContext;
   void DestroyFrames(DestroyContext&);
-
-  bool HasAbsoluteFrames() const { return mAbsoluteFrames.NotEmpty(); }
 
   /**
    * Mark our size-dependent absolute frames with NS_FRAME_HAS_DIRTY_CHILDREN
@@ -143,13 +170,14 @@ class AbsoluteContainingBlock {
                                      const LogicalSize& aCBSize,
                                      const LogicalSize& aKidSize,
                                      LogicalMargin& aMargin,
-                                     LogicalMargin& aOffsets);
+                                     const LogicalMargin& aOffsets);
 
   void ReflowAbsoluteFrame(
-      nsIFrame* aDelegatingFrame, nsPresContext* aPresContext,
+      nsContainerFrame* aDelegatingFrame, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput,
-      const nsRect& aOriginalContainingBlockRect, AbsPosReflowFlags aFlags,
-      nsIFrame* aKidFrame, nsReflowStatus& aStatus,
+      const nsRect& aOriginalContainingBlockRect,
+      const nsRect& aOriginalScrollableContainingBlockRect,
+      AbsPosReflowFlags aFlags, nsIFrame* aKidFrame, nsReflowStatus& aStatus,
       OverflowAreas* aOverflowAreas,
       mozilla::AnchorPosResolutionCache* aAnchorPosResolutionCache = nullptr);
 
@@ -161,8 +189,18 @@ class AbsoluteContainingBlock {
    */
   void DoMarkFramesDirty(bool aMarkAllDirty);
 
- protected:
-  nsFrameList mAbsoluteFrames;  // additional named child list
+  /**
+   * Remove aFrame from one of our frame lists without destroying it.
+   */
+  void StealFrame(nsIFrame* aFrame);
+
+  // Stores the abspos frames that have been placed in this containing block.
+  nsFrameList mAbsoluteFrames;
+
+  // A temporary frame list used during reflow, storing abspos frames that need
+  // to be reflowed by the delegating frame's next-in-flow after transferring
+  // them to its own AbsoluteContainingBlock.
+  nsFrameList mPushedAbsoluteFrames;
 
 #ifdef DEBUG
   // FrameChildListID::Fixed or FrameChildListID::Absolute

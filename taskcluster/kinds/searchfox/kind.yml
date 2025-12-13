@@ -16,6 +16,7 @@ transforms:
     - gecko_taskgraph.transforms.task:transforms
 
 task-defaults:
+    run-on-repo-type: [hg]
     index:
         product: firefox
     treeherder:
@@ -31,7 +32,7 @@ task-defaults:
     run:
         extra-config:
             max_build_output_timeout: 3600
-    worker-type: b-linux-gcp
+    worker-type: b-linux
     worker:
         env:
             MACH_BUILD_PYTHON_NATIVE_PACKAGE_SOURCE: system
@@ -368,6 +369,8 @@ tasks:
                 - android-gradle-dependencies
                 - android-ndk-linux
                 - android-sdk-linux
+                - linux64-embedded-uniffi-bindgen
+                - linux64-nimbus-fml
                 - linux64-jdk
                 - linux64-clang
                 - linux64-rust-cross

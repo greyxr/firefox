@@ -41,6 +41,7 @@
 #include "mozilla/layers/InProcessCompositorSession.h"
 #include "mozilla/layers/LayerTreeOwnerTracker.h"
 #include "mozilla/layers/RemoteCompositorSession.h"
+#include "mozilla/layers/UiCompositorControllerChild.h"
 #include "mozilla/layers/VideoBridgeParent.h"
 #include "mozilla/webrender/RenderThread.h"
 #include "mozilla/widget/PlatformWidgetTypes.h"
@@ -65,12 +66,11 @@
 
 #if defined(MOZ_WIDGET_ANDROID)
 #  include "mozilla/java/SurfaceControlManagerWrappers.h"
-#  include "mozilla/widget/AndroidUiThread.h"
-#  include "mozilla/layers/UiCompositorControllerChild.h"
 #endif  // defined(MOZ_WIDGET_ANDROID)
 
 #if defined(XP_WIN)
 #  include "gfxWindowsPlatform.h"
+#  include "mozilla/gfx/DeviceManagerDx.h"
 #endif
 
 namespace mozilla {
@@ -549,39 +549,6 @@ bool GPUProcessManager::EnsureVRManager() {
   return true;
 }
 
-#if defined(MOZ_WIDGET_ANDROID)
-RefPtr<UiCompositorControllerChild>
-GPUProcessManager::CreateUiCompositorController(nsIWidget* aWidget,
-                                                const LayersId aId) {
-  MOZ_DIAGNOSTIC_ASSERT(IsGPUReady());
-
-  if (!mGPUChild) {
-    return UiCompositorControllerChild::CreateForSameProcess(aId, aWidget);
-  }
-
-  ipc::Endpoint<PUiCompositorControllerParent> parentPipe;
-  ipc::Endpoint<PUiCompositorControllerChild> childPipe;
-  nsresult rv = PUiCompositorController::CreateEndpoints(
-      mGPUChild->OtherEndpointProcInfo(), ipc::EndpointProcInfo::Current(),
-      &parentPipe, &childPipe);
-  if (NS_FAILED(rv)) {
-    DisableGPUProcess("Failed to create PUiCompositorController endpoints");
-    return nullptr;
-  }
-
-  mGPUChild->SendInitUiCompositorController(aId, std::move(parentPipe));
-  RefPtr<UiCompositorControllerChild> result =
-      UiCompositorControllerChild::CreateForGPUProcess(
-          mProcessToken, std::move(childPipe), aWidget);
-
-  if (result) {
-    result->SetCompositorSurfaceManager(
-        mProcess->GetCompositorSurfaceManager());
-  }
-  return result;
-}
-#endif  // defined(MOZ_WIDGET_ANDROID)
-
 void GPUProcessManager::OnProcessLaunchComplete(GPUProcessHost* aHost) {
   MOZ_ASSERT(mProcess && mProcess == aHost);
 
@@ -614,6 +581,10 @@ void GPUProcessManager::OnProcessLaunchComplete(GPUProcessHost* aHost) {
   }
 #endif
 
+  // Set a high priority for the newly-created gpu process.
+  int pID = mProcess->GetChildProcessId();
+  hal::SetProcessPriority(pID, hal::PROCESS_PRIORITY_FOREGROUND_HIGH);
+
   ipc::Endpoint<PVsyncBridgeParent> vsyncParent;
   ipc::Endpoint<PVsyncBridgeChild> vsyncChild;
   nsresult rv = PVsyncBridge::CreateEndpoints(
@@ -629,7 +600,9 @@ void GPUProcessManager::OnProcessLaunchComplete(GPUProcessHost* aHost) {
   mGPUChild->SendInitVsyncBridge(std::move(vsyncParent));
 
   MOZ_DIAGNOSTIC_ASSERT(!mBatteryObserver);
-  mBatteryObserver = new BatteryObserver();
+  if (!AppShutdown::IsInOrBeyond(ShutdownPhase::XPCOMWillShutdown)) {
+    mBatteryObserver = new BatteryObserver();
+  }
 
   // Flush any pref updates that happened during launch and weren't
   // included in the blobs set up in LaunchGPUProcess.
@@ -826,29 +799,39 @@ void GPUProcessManager::RecordDeviceReset(DeviceResetReason aReason) {
 /* static */
 void GPUProcessManager::NotifyDeviceReset(DeviceResetReason aReason,
                                           DeviceResetDetectPlace aPlace) {
-  if (XRE_IsGPUProcess()) {
-    if (!GPUParent::GetSingleton()) {
-      MOZ_ASSERT_UNREACHABLE("unexpected to be called");
-      return;
-    }
-    // End up to GPUProcessManager::OnRemoteProcessDeviceReset()
-    GPUParent::GetSingleton()->NotifyDeviceReset(aReason, aPlace);
-  } else {
-    if (!GPUProcessManager::Get()) {
-      MOZ_ASSERT_UNREACHABLE("unexpected to be called");
-      return;
-    }
+  if (!NS_IsMainThread()) {
+    NS_DispatchToMainThread(NS_NewRunnableFunction(
+        "gfx::GPUProcessManager::NotifyDeviceReset",
+        [aReason, aPlace]() -> void {
+          gfx::GPUProcessManager::NotifyDeviceReset(aReason, aPlace);
+        }));
+    return;
+  }
 
-    if (NS_IsMainThread()) {
-      GPUProcessManager::Get()->OnInProcessDeviceReset(aReason, aPlace);
+#ifdef XP_WIN
+  // Reset and reinitialize the compositor devices
+  if (auto* deviceManager = DeviceManagerDx::Get()) {
+    deviceManager->MaybeResetAndReacquireDevices();
+  }
+#else
+  gfx::GPUProcessManager::RecordDeviceReset(aReason);
+#endif
+
+  if (XRE_IsGPUProcess()) {
+    if (auto* gpuParent = GPUParent::GetSingleton()) {
+      // End up to GPUProcessManager::OnRemoteProcessDeviceReset()
+      gpuParent->NotifyDeviceReset(aReason, aPlace);
     } else {
-      NS_DispatchToMainThread(NS_NewRunnableFunction(
-          "gfx::GPUProcessManager::OnInProcessDeviceReset",
-          [aReason, aPlace]() -> void {
-            gfx::GPUProcessManager::Get()->OnInProcessDeviceReset(aReason,
-                                                                  aPlace);
-          }));
+      MOZ_ASSERT_UNREACHABLE("unexpected to be called");
     }
+    return;
+  }
+
+  MOZ_ASSERT(XRE_IsParentProcess());
+  if (auto* gpm = GPUProcessManager::Get()) {
+    gpm->OnInProcessDeviceReset(aReason, aPlace);
+  } else {
+    MOZ_ASSERT_UNREACHABLE("unexpected to be called");
   }
 }
 
@@ -1268,16 +1251,6 @@ already_AddRefed<CompositorSession> GPUProcessManager::CreateTopLevelCompositor(
         aInnerWindowId);
   }
 
-#if defined(MOZ_WIDGET_ANDROID)
-  if (session) {
-    // Nothing to do if controller gets a nullptr
-    auto controller =
-        CreateUiCompositorController(aWidget, session->RootLayerTreeId());
-    MOZ_ASSERT(controller);
-    session->SetUiCompositorControllerChild(std::move(controller));
-  }
-#endif  // defined(MOZ_WIDGET_ANDROID)
-
   *aRetryOut = false;
   return session.forget();
 }
@@ -1329,12 +1302,12 @@ RefPtr<CompositorSession> GPUProcessManager::CreateRemoteSession(
     ipc::Endpoint<PAPZInputBridgeParent> parentPipe;
     ipc::Endpoint<PAPZInputBridgeChild> childPipe;
     nsresult rv = PAPZInputBridge::CreateEndpoints(
-        mGPUChild->OtherEndpointProcInfo(), ipc::EndpointProcInfo::Current(),
+        child->OtherEndpointProcInfo(), ipc::EndpointProcInfo::Current(),
         &parentPipe, &childPipe);
     if (NS_FAILED(rv)) {
       return nullptr;
     }
-    mGPUChild->SendInitAPZInputBridge(aRootLayerTreeId, std::move(parentPipe));
+    child->SendInitAPZInputBridge(std::move(parentPipe));
 
     RefPtr<APZInputBridgeChild> inputBridge =
         APZInputBridgeChild::Create(mProcessToken, std::move(childPipe));
@@ -1345,7 +1318,30 @@ RefPtr<CompositorSession> GPUProcessManager::CreateRemoteSession(
     apz->SetInputBridge(inputBridge);
   }
 
-  return new RemoteCompositorSession(aWidget, child, widget, apz,
+  RefPtr<UiCompositorControllerChild> uiController = nullptr;
+#  if defined(MOZ_WIDGET_ANDROID)
+  {
+    ipc::Endpoint<PUiCompositorControllerParent> parentPipe;
+    ipc::Endpoint<PUiCompositorControllerChild> childPipe;
+    nsresult rv = PUiCompositorController::CreateEndpoints(
+        child->OtherEndpointProcInfo(), ipc::EndpointProcInfo::Current(),
+        &parentPipe, &childPipe);
+    if (NS_FAILED(rv)) {
+      return nullptr;
+    }
+    child->SendInitUiCompositorController(std::move(parentPipe));
+    uiController = UiCompositorControllerChild::CreateForGPUProcess(
+        mProcessToken, std::move(childPipe), aWidget);
+    MOZ_ASSERT(uiController);
+    if (!uiController) {
+      return nullptr;
+    }
+    uiController->SetCompositorSurfaceManager(
+        mProcess->GetCompositorSurfaceManager());
+  }
+#  endif
+
+  return new RemoteCompositorSession(aWidget, child, widget, apz, uiController,
                                      aRootLayerTreeId);
 #else
   gfxCriticalNote << "Platform does not support out-of-process compositing";

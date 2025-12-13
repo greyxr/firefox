@@ -270,21 +270,34 @@
      */
     #splitViewSplitter = null;
 
+    static #SPLIT_VIEW_PANEL_EVENTS = Object.freeze([
+      "click",
+      "focus",
+      "mouseover",
+      "mouseout",
+    ]);
+
     constructor() {
       super();
       this._tabbox = null;
     }
 
     handleEvent(e) {
+      const browser = e.currentTarget;
       switch (e.type) {
         case "click":
         case "focus": {
-          const browser = e.currentTarget;
-          const tab = browser.getTabBrowser().getTabForBrowser(browser);
+          const tab = gBrowser.getTabForBrowser(browser);
           const tabstrip = this.tabbox.tabs;
           tabstrip.selectedItem = tab;
           break;
         }
+        case "mouseover":
+          gBrowser.appendStatusPanel(browser);
+          break;
+        case "mouseout":
+          gBrowser.appendStatusPanel();
+          break;
       }
     }
 
@@ -354,19 +367,17 @@
     }
 
     set splitViewPanels(newPanels) {
-      const oldPanels = this.#splitViewPanels;
-      for (const panel of oldPanels) {
-        this.removePanelFromSplitView(panel, false);
-      }
       for (const [i, panel] of newPanels.entries()) {
         const panelEl = document.getElementById(panel);
         panelEl?.classList.add("split-view-panel");
         panelEl?.setAttribute("column", i);
-        panelEl?.querySelector("browser")?.addEventListener("click", this);
-        panelEl?.querySelector("browser")?.addEventListener("focus", this);
+        const browser = panelEl?.querySelector("browser");
+        for (const eventType of MozTabpanels.#SPLIT_VIEW_PANEL_EVENTS) {
+          browser?.addEventListener(eventType, this);
+        }
       }
       this.#splitViewPanels = newPanels;
-      this.#isSplitViewActive = !!newPanels.length;
+      this.isSplitViewActive = !!newPanels.length;
     }
 
     get splitViewPanels() {
@@ -384,25 +395,37 @@
       const panelEl = document.getElementById(panel);
       panelEl?.classList.remove("split-view-panel");
       panelEl?.removeAttribute("column");
-      panelEl?.querySelector("browser")?.removeEventListener("click", this);
-      panelEl?.querySelector("browser")?.removeEventListener("focus", this);
+      const browser = panelEl?.querySelector("browser");
+      for (const eventType of MozTabpanels.#SPLIT_VIEW_PANEL_EVENTS) {
+        browser?.removeEventListener(eventType, this);
+      }
       if (updateArray) {
         const index = this.#splitViewPanels.indexOf(panel);
         if (index !== -1) {
           this.#splitViewPanels.splice(index, 1);
         }
       }
-      this.#isSplitViewActive = !!this.#splitViewPanels.length;
+      this.isSplitViewActive = !!this.#splitViewPanels.length;
     }
 
-    set #isSplitViewActive(isActive) {
+    set isSplitViewActive(isActive) {
       this.toggleAttribute("splitview", isActive);
       this.splitViewSplitter.hidden = !isActive;
+      const selectedPanel = this.selectedPanel;
       if (isActive) {
         // Place splitter after first panel, so that it can be resized.
         const firstPanel = document.getElementById(this.splitViewPanels[0]);
         firstPanel?.after(this.#splitViewSplitter);
       }
+
+      // Ensure that selected index stays up to date, in case the splitter
+      // offsets it.
+      this.selectedPanel = selectedPanel;
+    }
+
+    setSplitViewPanelActive(isActive, panel) {
+      const panelEl = document.getElementById(panel);
+      panelEl?.classList.toggle("split-view-panel-active", isActive);
     }
   }
 
@@ -864,12 +887,12 @@
      * @param {MozTab} startTab
      *   A `<tab>` element to start searching from.
      * @param {object} opts
-     * @param {Number} [opts.direction=1]
+     * @param {number} [opts.direction=1]
      *   1 to search forward, -1 to search backward.
-     * @param {Boolean} [opts.wrap=false]
+     * @param {boolean} [opts.wrap=false]
      *   If true, wrap around if the search reaches the end (or beginning)
      *   of the tab strip.
-     * @param {Boolean} [opts.startWithAdjacent=true]
+     * @param {boolean} [opts.startWithAdjacent=true]
      *   If true (which is the default), start searching from the next tab
      *   after (or before) `startTab`. If false, `startTab` may be returned
      *   if it passes the filter.

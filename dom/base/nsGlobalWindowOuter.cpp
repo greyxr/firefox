@@ -10,6 +10,7 @@
 
 #include "mozilla/Assertions.h"
 #include "mozilla/ScopeExit.h"
+#include "nsDeviceContext.h"
 #include "nsGlobalWindowInner.h"
 
 // Local Includes
@@ -63,6 +64,7 @@
 #include "nsIDOMStorageManager.h"
 #include "nsIDocShellTreeOwner.h"
 #include "nsIInterfaceRequestorUtils.h"
+#include "nsILoadGroup.h"
 #include "nsIPermissionManager.h"
 #include "nsIScriptContext.h"
 #include "nsISecureBrowserUI.h"
@@ -170,8 +172,6 @@
 #include "nsQueryObject.h"
 #include "nsServiceManagerUtils.h"
 #include "nsThreadUtils.h"
-#include "nsView.h"
-#include "nsViewManager.h"
 #include "xpcprivate.h"
 
 #ifdef NS_PRINTING
@@ -1714,7 +1714,9 @@ nsIScriptContext* nsGlobalWindowOuter::GetScriptContext() { return mContext; }
 
 bool nsGlobalWindowOuter::WouldReuseInnerWindow(Document* aNewDocument) {
   // We reuse the inner window when:
-  // a. We are currently at our original document.
+  // a. The current document is transient, i.e. a temporary placeholder while
+  //    an async load is ongoing. This is equivalent to the uncommitted initial
+  //    document.
   // b. At least one of the following conditions are true:
   // -- The new document is the same as the old document. This means that we're
   //    getting called from document.open().
@@ -1724,7 +1726,7 @@ bool nsGlobalWindowOuter::WouldReuseInnerWindow(Document* aNewDocument) {
     return false;
   }
 
-  if (!mDoc->IsInitialDocument()) {
+  if (!mDoc->IsUncommittedInitialDocument()) {
     return false;
   }
 
@@ -1757,8 +1759,7 @@ bool nsGlobalWindowOuter::WouldReuseInnerWindow(Document* aNewDocument) {
 }
 
 void nsGlobalWindowOuter::SetInitialPrincipal(
-    nsIPrincipal* aNewWindowPrincipal, nsIPolicyContainer* aPolicyContainer,
-    const Maybe<nsILoadInfo::CrossOriginEmbedderPolicy>& aCOEP) {
+    nsIPrincipal* aNewWindowPrincipal) {
   // We should never create windows with an expanded principal.
   // If we have a system principal, make sure we're not using it for a content
   // docshell.
@@ -1770,30 +1771,28 @@ void nsGlobalWindowOuter::SetInitialPrincipal(
     aNewWindowPrincipal = nullptr;
   }
 
-  // If there's an existing document, bail if it either:
-  if (mDoc) {
-    // (a) is not an initial about:blank document, or
-    if (!mDoc->IsInitialDocument()) return;
-    // (b) already has the correct principal.
-    if (mDoc->NodePrincipal() == aNewWindowPrincipal) return;
+  MOZ_ASSERT(mDoc, "Some document should've been eagerly created");
+
+  // Bail if the existing document is (a) not initial
+  if (!mDoc->IsUncommittedInitialDocument()) return;
+  // or (b) already has the correct principal.
+  if (mDoc->NodePrincipal() == aNewWindowPrincipal) return;
 
 #ifdef DEBUG
-    // If we have a document loaded at this point, it had better be about:blank.
-    // Otherwise, something is really weird. An about:blank page has a
-    // NullPrincipal.
-    bool isNullPrincipal;
-    MOZ_ASSERT(NS_SUCCEEDED(mDoc->NodePrincipal()->GetIsNullPrincipal(
-                   &isNullPrincipal)) &&
-               isNullPrincipal);
+  // The current document should be a dummy and therefore have a null principal
+  bool isNullPrincipal;
+  MOZ_ASSERT(NS_SUCCEEDED(
+                 mDoc->NodePrincipal()->GetIsNullPrincipal(&isNullPrincipal)) &&
+             isNullPrincipal);
 #endif
-  }
 
   // Use the subject (or system) principal as the storage principal too until
   // the new window finishes navigating and gets a real storage principal.
   nsDocShell::Cast(GetDocShell())
-      ->CreateAboutBlankDocumentViewer(aNewWindowPrincipal, aNewWindowPrincipal,
-                                       aPolicyContainer, nullptr,
-                                       /* aIsInitialDocument */ true, aCOEP);
+      ->CreateAboutBlankDocumentViewer(
+          aNewWindowPrincipal, aNewWindowPrincipal, mDoc->GetPolicyContainer(),
+          mDoc->GetDocBaseURI(),
+          /* aIsInitialDocument */ true, mDoc->GetEmbedderPolicy());
 
   if (mDoc) {
     MOZ_ASSERT(mDoc->IsInitialDocument(),
@@ -2497,11 +2496,10 @@ nsresult nsGlobalWindowOuter::SetNewDocument(Document* aDocument,
   }
 
   if (!newInnerWindow->mHasNotifiedGlobalCreated && mDoc) {
-    // We should probably notify. However if this is the, arguably bad,
-    // situation when we're creating a temporary non-chrome-about-blank
-    // document in a chrome docshell, don't notify just yet. Instead wait
-    // until we have a real chrome doc.
-    const bool isContentAboutBlankInChromeDocshell = [&] {
+    // We should probably notify, except if we have the initial about:blank
+    // in a chrome docshell, defer notification until the first non-initial
+    // document.
+    const bool isAboutBlankInChromeDocshell = [&] {
       if (!mDocShell) {
         return false;
       }
@@ -2511,10 +2509,10 @@ nsresult nsGlobalWindowOuter::SetNewDocument(Document* aDocument,
         return false;
       }
 
-      return !mDoc->NodePrincipal()->IsSystemPrincipal();
+      return mDoc->IsInitialDocument();
     }();
 
-    if (!isContentAboutBlankInChromeDocshell) {
+    if (!isAboutBlankInChromeDocshell) {
       newInnerWindow->mHasNotifiedGlobalCreated = true;
       nsContentUtils::AddScriptRunner(NewRunnableMethod(
           "nsGlobalWindowOuter::DispatchDOMWindowCreated", this,
@@ -3429,24 +3427,25 @@ nsresult nsGlobalWindowOuter::GetInnerSize(CSSSize& aSize) {
 
   NS_ENSURE_STATE(mDocShell);
 
-  RefPtr<nsPresContext> presContext = mDocShell->GetPresContext();
-  PresShell* presShell = mDocShell->GetPresShell();
-
-  if (!presContext || !presShell) {
+  RefPtr<PresShell> presShell = mDocShell->GetPresShell();
+  if (!presShell) {
     aSize = {};
     return NS_OK;
   }
 
   // Whether or not the css viewport has been overridden, we can get the
   // correct value by looking at the visible area of the presContext.
-  if (RefPtr<nsViewManager> viewManager = presShell->GetViewManager()) {
-    viewManager->FlushDelayedResize();
+  presShell->FlushDelayedResize();
+
+  nsPresContext* pc = presShell->GetPresContext();
+  if (NS_WARN_IF(!pc)) {
+    aSize = {};
+    return NS_OK;
   }
 
   nsSize innerSize = presShell->GetInnerSize();
-  if (presContext->GetDynamicToolbarState() == DynamicToolbarState::Collapsed) {
-    innerSize =
-        nsLayoutUtils::ExpandHeightForViewportUnits(presContext, innerSize);
+  if (pc->GetDynamicToolbarState() == DynamicToolbarState::Collapsed) {
+    innerSize = nsLayoutUtils::ExpandHeightForViewportUnits(pc, innerSize);
   }
 
   aSize = CSSPixel::FromAppUnits(innerSize);
@@ -5899,7 +5898,13 @@ bool nsGlobalWindowOuter::CanClose() {
   if (viewer) {
     bool canClose;
     nsresult rv = viewer->PermitUnload(&canClose);
-    if (NS_SUCCEEDED(rv) && !canClose) return false;
+    // PermitUnload can destroy the docshell.
+    if (!mDocShell || mDocShell->IsBeingDestroyed()) {
+      return true;
+    }
+    if (NS_SUCCEEDED(rv) && !canClose) {
+      return false;
+    }
   }
 
   // If we still have to print, we delay the closing until print has happened.
@@ -6335,7 +6340,17 @@ Selection* nsGlobalWindowOuter::GetSelectionOuter() {
 
   PresShell* presShell = mDocShell->GetPresShell();
   if (!presShell) {
-    return nullptr;
+    // Force layout of the containing frame.
+    // layout/reftests/selection/modify-range.html goes
+    // through here.
+    EnsureSizeAndPositionUpToDate();
+    if (!mDocShell) {
+      return nullptr;
+    }
+    presShell = mDocShell->GetPresShell();
+    if (!presShell) {
+      return nullptr;
+    }
   }
   return presShell->GetCurrentSelection(SelectionType::eNormal);
 }

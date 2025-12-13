@@ -18,19 +18,15 @@ import { AdBanner } from "../AdBanner/AdBanner.jsx";
 import { PersonalizedCard } from "../PersonalizedCard/PersonalizedCard";
 import { FollowSectionButtonHighlight } from "../FeatureHighlight/FollowSectionButtonHighlight";
 import { MessageWrapper } from "content-src/components/MessageWrapper/MessageWrapper";
-import { TrendingSearches } from "../TrendingSearches/TrendingSearches.jsx";
 import { Weather } from "../../Weather/Weather.jsx";
 
 // Prefs
 const PREF_SECTIONS_CARDS_ENABLED = "discoverystream.sections.cards.enabled";
-const PREF_SECTIONS_CARDS_THUMBS_UP_DOWN_ENABLED =
-  "discoverystream.sections.cards.thumbsUpDown.enabled";
 const PREF_SECTIONS_PERSONALIZATION_ENABLED =
   "discoverystream.sections.personalization.enabled";
 const PREF_TOPICS_ENABLED = "discoverystream.topicLabels.enabled";
 const PREF_TOPICS_SELECTED = "discoverystream.topicSelection.selectedTopics";
 const PREF_TOPICS_AVAILABLE = "discoverystream.topicSelection.topics";
-const PREF_THUMBS_UP_DOWN_ENABLED = "discoverystream.thumbsUpDown.enabled";
 const PREF_INTEREST_PICKER_ENABLED =
   "discoverystream.sections.interestPicker.enabled";
 const PREF_VISIBLE_SECTIONS =
@@ -42,20 +38,11 @@ const PREF_LEADERBOARD_POSITION = "newtabAdSize.leaderboard.position";
 const PREF_REFINED_CARDS_ENABLED = "discoverystream.refinedCardsLayout.enabled";
 const PREF_INFERRED_PERSONALIZATION_USER =
   "discoverystream.sections.personalization.inferred.user.enabled";
-const PREF_TRENDING_SEARCH = "trendingSearch.enabled";
-const PREF_TRENDING_SEARCH_SYSTEM = "system.trendingSearch.enabled";
-const PREF_SEARCH_ENGINE = "trendingSearch.defaultSearchEngine";
-const PREF_TRENDING_SEARCH_VARIANT = "trendingSearch.variant";
 const PREF_DAILY_BRIEF_SECTIONID = "discoverystream.dailyBrief.sectionId";
 const PREF_SPOCS_STARTUPCACHE_ENABLED =
   "discoverystream.spocs.startupCache.enabled";
 
-function getLayoutData(
-  responsiveLayouts,
-  index,
-  refinedCardsLayout,
-  sectionKey
-) {
+function getLayoutData(responsiveLayouts, index, refinedCardsLayout) {
   let layoutData = {
     classNames: [],
     imageSizes: {},
@@ -64,23 +51,11 @@ function getLayoutData(
   responsiveLayouts.forEach(layout => {
     layout.tiles.forEach((tile, tileIndex) => {
       if (tile.position === index) {
-        // When trending searches should be placed in the `top_stories_section`,
-        // we update the layout so that the first item is always a medium card to make
-        // room for the trending search widget
-        if (sectionKey === "top_stories_section" && tileIndex === 0) {
-          layoutData.classNames.push(`col-${layout.columnCount}-medium`);
-          layoutData.classNames.push(
-            `col-${layout.columnCount}-position-${tileIndex}`
-          );
-          layoutData.imageSizes[layout.columnCount] = "medium";
-          layoutData.classNames.push(`col-${layout.columnCount}-hide-excerpt`);
-        } else {
-          layoutData.classNames.push(`col-${layout.columnCount}-${tile.size}`);
-          layoutData.classNames.push(
-            `col-${layout.columnCount}-position-${tileIndex}`
-          );
-          layoutData.imageSizes[layout.columnCount] = tile.size;
-        }
+        layoutData.classNames.push(`col-${layout.columnCount}-${tile.size}`);
+        layoutData.classNames.push(
+          `col-${layout.columnCount}-position-${tileIndex}`
+        );
+        layoutData.imageSizes[layout.columnCount] = tile.size;
 
         // The API tells us whether the tile should show the excerpt or not.
         // Apply extra styles accordingly.
@@ -224,21 +199,10 @@ function CardSection({
 
   const showTopics = prefs[PREF_TOPICS_ENABLED];
   const mayHaveSectionsCards = prefs[PREF_SECTIONS_CARDS_ENABLED];
-  const mayHaveSectionsCardsThumbsUpDown =
-    prefs[PREF_SECTIONS_CARDS_THUMBS_UP_DOWN_ENABLED];
-  const mayHaveThumbsUpDown = prefs[PREF_THUMBS_UP_DOWN_ENABLED];
   const selectedTopics = prefs[PREF_TOPICS_SELECTED];
   const availableTopics = prefs[PREF_TOPICS_AVAILABLE];
   const refinedCardsLayout = prefs[PREF_REFINED_CARDS_ENABLED];
   const spocsStartupCacheEnabled = prefs[PREF_SPOCS_STARTUPCACHE_ENABLED];
-
-  const trendingEnabled =
-    prefs[PREF_TRENDING_SEARCH] &&
-    prefs[PREF_TRENDING_SEARCH_SYSTEM] &&
-    prefs[PREF_SEARCH_ENGINE]?.toLowerCase() === "google";
-  const trendingVariant = prefs[PREF_TRENDING_SEARCH_VARIANT];
-
-  const shouldShowTrendingSearch = trendingEnabled && trendingVariant === "b";
 
   const mayHaveSectionsPersonalization =
     prefs[PREF_SECTIONS_PERSONALIZATION_ENABLED];
@@ -264,10 +228,6 @@ function CardSection({
 
   // Ref to hold the section element
   const sectionRefs = useIntersectionObserver(handleIntersection);
-
-  // Only show thumbs up/down buttons if both default thumbs and sections thumbs prefs are enabled
-  const mayHaveCombinedThumbsUpDown =
-    mayHaveSectionsCardsThumbsUpDown && mayHaveThumbsUpDown;
 
   const onFollowClick = useCallback(() => {
     const updatedSectionData = {
@@ -428,8 +388,7 @@ function CardSection({
           const layoutData = getLayoutData(
             responsiveLayouts,
             index,
-            refinedCardsLayout,
-            shouldShowTrendingSearch && sectionKey
+            refinedCardsLayout
           );
 
           const { classNames, imageSizes } = layoutData;
@@ -484,7 +443,6 @@ function CardSection({
               received_rank={rec.received_rank}
               format={rec.format}
               alt_text={rec.alt_text}
-              mayHaveThumbsUpDown={mayHaveCombinedThumbsUpDown}
               mayHaveSectionsCards={mayHaveSectionsCards}
               showTopics={shouldShowLabels}
               selectedTopics={selectedTopics}
@@ -502,11 +460,7 @@ function CardSection({
               onFocus={() => onCardFocus(index)}
             />
           );
-          return index === 0 &&
-            shouldShowTrendingSearch &&
-            sectionKey === "top_stories_section"
-            ? [card, <TrendingSearches key="trending" />]
-            : [card];
+          return [card];
         })}
       </div>
     </section>

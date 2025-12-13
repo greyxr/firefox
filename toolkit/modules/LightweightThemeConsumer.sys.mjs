@@ -12,6 +12,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ThemeContentPropertyList: "resource:///modules/ThemeVariableMap.sys.mjs",
   ThemeVariableMap: "resource:///modules/ThemeVariableMap.sys.mjs",
   BuiltInThemeConfig: "resource:///modules/BuiltInThemeConfig.sys.mjs",
+  LightweightThemeManager:
+    "resource://gre/modules/LightweightThemeManager.sys.mjs",
 });
 
 // Whether the content and chrome areas should always use the same color
@@ -222,6 +224,14 @@ export function LightweightThemeConsumer(aDocument) {
   this._win = aDocument.defaultView;
   this._winId = this._win.docShell.outerWindowID;
 
+  XPCOMUtils.defineLazyPreferenceGetter(
+    this,
+    "FORCED_COLORS_OVERRIDE_ENABLED",
+    "browser.theme.forced-colors-override.enabled",
+    true,
+    () => this._update(this._lastData)
+  );
+
   Services.obs.addObserver(this, "lightweight-theme-styling-update");
 
   this.darkThemeMediaQuery = this._win.matchMedia("(-moz-system-dark-theme)");
@@ -230,10 +240,7 @@ export function LightweightThemeConsumer(aDocument) {
   this.forcedColorsMediaQuery = this._win.matchMedia("(forced-colors)");
   this.forcedColorsMediaQuery.addListener(this);
 
-  const { LightweightThemeManager } = ChromeUtils.importESModule(
-    "resource://gre/modules/LightweightThemeManager.sys.mjs"
-  );
-  this._update(LightweightThemeManager.themeData);
+  this._update(lazy.LightweightThemeManager.themeData);
 
   this._win.addEventListener("unload", this, { once: true });
 }
@@ -309,7 +316,10 @@ LightweightThemeConsumer.prototype = {
     })();
 
     let theme = useDarkTheme ? themeData.darkTheme : themeData.theme;
-    if (!theme || this.forcedColorsMediaQuery?.matches) {
+    let forcedColorsThemeOverride =
+      this.FORCED_COLORS_OVERRIDE_ENABLED &&
+      this.forcedColorsMediaQuery?.matches;
+    if (!theme || forcedColorsThemeOverride) {
       theme = { id: DEFAULT_THEME_ID };
     }
     let builtinThemeConfig = lazy.BuiltInThemeConfig.get(theme.id);
@@ -566,6 +576,7 @@ function _hasDarkFrame(doc, theme, colors, hasTheme) {
  * Sets dark mode attributes on root, if required. We must do this here,
  * instead of in each color's processColor function, because multiple colors
  * are considered.
+ *
  * @param {Document} doc
  * @param {Element} root
  * @param {object} colors
@@ -627,6 +638,7 @@ function _setDarkModeAttributes(doc, root, theme, colors, hasTheme) {
  * scheme. We consider both the background and foreground (i.e. usually text)
  * colors because some text colors can be dark enough for our heuristics, but
  * still contrast well enough with a dark background
+ *
  * @param {Document} doc
  * @param {object} colors
  * @param {string?} textPropertyName

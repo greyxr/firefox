@@ -83,13 +83,10 @@ const CryptoErrors = {
 
 async function addLogin(login) {
   const result = await Services.logins.addLoginAsync(login);
-  registerCleanupFunction(() => {
-    let matchData = Cc["@mozilla.org/hash-property-bag;1"].createInstance(
-      Ci.nsIWritablePropertyBag2
-    );
-    matchData.setPropertyAsAUTF8String("guid", result.guid);
-
-    let logins = Services.logins.searchLogins(matchData);
+  registerCleanupFunction(async () => {
+    let logins = await Services.logins.searchLoginsAsync({
+      guid: result.guid,
+    });
     if (!logins.length) {
       return;
     }
@@ -200,6 +197,7 @@ add_setup(async function setup_head() {
 
 /**
  * Waits for the primary password prompt and performs an action.
+ *
  * @param {string} action Set to "authenticate" to log in or "cancel" to
  *        close the dialog without logging in.
  */

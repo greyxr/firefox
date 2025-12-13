@@ -96,7 +96,6 @@
 
 #  if defined(MOZ_OXIDIZED_BREAKPAD)
 #    include "mozilla/toolkit/crashreporter/rust_minidump_writer_linux_ffi_generated.h"
-#    include <unordered_map>
 #    include <mutex>
 #    include <sys/auxv.h>
 #  endif  // defined(MOZ_OXIDIZED_BREAKPAD)
@@ -220,10 +219,12 @@ MOZ_RUNINIT static std::optional<xpstring> defaultMemoryReportPath = {};
 
 static const char kCrashMainID[] = "crash.main.3\n";
 
-static CrashHelperClient* gCrashHelperClient = nullptr;
+static StaticMutex gCrashHelperClientMutex;
+static CrashHelperClient* gCrashHelperClient
+    MOZ_GUARDED_BY(gCrashHelperClientMutex) = nullptr;
 static google_breakpad::ExceptionHandler* gExceptionHandler = nullptr;
 static mozilla::Atomic<bool> gEncounteredChildException(false);
-MOZ_CONSTINIT static nsCString gServerURL;
+constinit static nsCString gServerURL;
 
 MOZ_RUNINIT static xpstring pendingDirectory;
 MOZ_RUNINIT static xpstring crashReporterPath;
@@ -1385,8 +1386,10 @@ static void WriteAnnotationsForMainProcessCrash(PlatformWriter& pw,
                  static_cast<uint64_t>(crashTime - inactiveStateStart));
   }
 
-  double uptimeTS = (TimeStamp::NowLoRes() - TimeStamp::ProcessCreation())
-                        .ToSecondsSigDigits();
+  // ToSeconds preserves the full precision of the TimeDuration. It is assumed
+  // that visualizations of this value will format/truncate it to their needs.
+  double uptimeTS =
+      (TimeStamp::NowLoRes() - TimeStamp::ProcessCreation()).ToSeconds();
   char uptimeTSString[64] = {};
   SimpleNoCLibDtoA(uptimeTS, uptimeTSString, sizeof(uptimeTSString));
   writer.Write(Annotation::UptimeTS, uptimeTSString);
@@ -2099,6 +2102,7 @@ nsresult SetMinidumpPath(const nsAString& aPath) {
 #endif
 
   // Set the path used by the crash helper for out-of-process crash generation
+  StaticMutexAutoLock lock(gCrashHelperClientMutex);
   if (gCrashHelperClient) {
     set_crash_report_path(gCrashHelperClient,
                           (const BreakpadChar*)path.BeginReading());
@@ -2324,6 +2328,7 @@ nsresult UnsetExceptionHandler() {
   dumpSafetyLock = nullptr;
 
   std::set_terminate(oldTerminateHandler);
+  StaticMutexAutoLock lock(gCrashHelperClientMutex);
   if (gCrashHelperClient) {
     crash_helper_shutdown(gCrashHelperClient);
     gCrashHelperClient = nullptr;
@@ -2553,8 +2558,10 @@ static void AddCommonAnnotations(AnnotationTable& aAnnotations) {
     aAnnotations[Annotation::LastInteractionDuration] = inactiveDuration;
   }
 
-  double uptimeTS = (TimeStamp::NowLoRes() - TimeStamp::ProcessCreation())
-                        .ToSecondsSigDigits();
+  // ToSeconds preserves the full precision of the TimeDuration. It is assumed
+  // that visualizations of this value will format/truncate it to their needs.
+  double uptimeTS =
+      (TimeStamp::NowLoRes() - TimeStamp::ProcessCreation()).ToSeconds();
   nsAutoCString uptimeStr;
   uptimeStr.AppendFloat(uptimeTS);
   aAnnotations[Annotation::UptimeTS] = uptimeStr;
@@ -3291,6 +3298,7 @@ static void OOPInit() {
       gExceptionHandler->dump_path().c_str());
 #endif
 
+  StaticMutexAutoLock lock(gCrashHelperClientMutex);
   gCrashHelperClient = crashHelperClient;
 }
 
@@ -3321,6 +3329,7 @@ CrashPipeType GetChildNotificationPipe() {
 }
 
 UniqueFileHandle RegisterChildIPCChannel() {
+  StaticMutexAutoLock lock(gCrashHelperClientMutex);
   if (gCrashHelperClient) {
     RawAncillaryData ipc_endpoint =
         register_child_ipc_channel(gCrashHelperClient);
@@ -3397,8 +3406,11 @@ bool TakeMinidumpForChild(ProcessId childPid, nsIFile** dump,
 
   CrashReport* crash_report = nullptr;
 
-  if (gCrashHelperClient) {
-    crash_report = transfer_crash_report(gCrashHelperClient, childPid);
+  {
+    StaticMutexAutoLock lock(gCrashHelperClientMutex);
+    if (gCrashHelperClient) {
+      crash_report = transfer_crash_report(gCrashHelperClient, childPid);
+    }
   }
 
   if (!crash_report) {
@@ -3679,12 +3691,14 @@ void GetCurrentProcessAuxvInfo(DirectAuxvDumpInfo* aAuxvInfo) {
 
 void RegisterChildAuxvInfo(pid_t aChildPid,
                            const DirectAuxvDumpInfo& aAuxvInfo) {
+  StaticMutexAutoLock lock(gCrashHelperClientMutex);
   if (gCrashHelperClient) {
     register_child_auxv_info(gCrashHelperClient, aChildPid, &aAuxvInfo);
   }
 }
 
 void UnregisterChildAuxvInfo(pid_t aChildPid) {
+  StaticMutexAutoLock lock(gCrashHelperClientMutex);
   if (gCrashHelperClient) {
     unregister_child_auxv_info(gCrashHelperClient, aChildPid);
   }

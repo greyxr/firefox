@@ -94,11 +94,13 @@
     init() {
       this.tabContainer = document.getElementById("tabbrowser-tabs");
       this.tabGroupMenu = document.getElementById("tab-group-editor");
+      this.tabNoteMenu = document.getElementById("tab-note-menu");
       this.tabbox = document.getElementById("tabbrowser-tabbox");
       this.tabpanels = document.getElementById("tabbrowser-tabpanels");
       this.pinnedTabsContainer = document.getElementById(
         "pinned-tabs-container"
       );
+      this.splitViewCommandSet = document.getElementById("splitViewCommands");
 
       ChromeUtils.defineESModuleGetters(this, {
         AsyncTabSwitcher:
@@ -117,6 +119,7 @@
         TaskbarTabs: "resource:///modules/taskbartabs/TaskbarTabs.sys.mjs",
         UrlbarProviderOpenTabs:
           "moz-src:///browser/components/urlbar/UrlbarProviderOpenTabs.sys.mjs",
+        SVG_DATA_URI_PREFIX: "moz-src:///browser/modules/FaviconUtils.sys.mjs",
       });
       ChromeUtils.defineLazyGetter(this, "tabLocalization", () => {
         return new Localization(
@@ -160,6 +163,12 @@
       );
       XPCOMUtils.defineLazyPreferenceGetter(
         this,
+        "_tabNotesEnabled",
+        "browser.tabs.notes.enabled",
+        false
+      );
+      XPCOMUtils.defineLazyPreferenceGetter(
+        this,
         "showPidAndActiveness",
         "browser.tabs.tooltipsShowPidAndActiveness",
         false
@@ -175,6 +184,12 @@
         "_notificationEnableDelay",
         "security.notification_enable_delay",
         500
+      );
+      XPCOMUtils.defineLazyPreferenceGetter(
+        this,
+        "_remoteSVGIconDecoding",
+        "browser.tabs.remoteSVGIconDecoding",
+        false
       );
 
       if (AppConstants.MOZ_CRASHREPORTER) {
@@ -379,6 +394,10 @@
 
     /** @type {MozTabSplitViewWrapper} */
     #activeSplitView = null;
+
+    get activeSplitView() {
+      return this.#activeSplitView;
+    }
 
     /**
      * List of browsers which are currently in an active Split View.
@@ -628,7 +647,7 @@
 
       this._tabForBrowser.set(browser, tab);
 
-      this._appendStatusPanel();
+      this.appendStatusPanel();
 
       // This is the initial browser, so it's usually active; the default is false
       // so we have to update it:
@@ -807,6 +826,7 @@
 
     /**
      * Get the findbar, and create it if it doesn't exist.
+     *
      * @return the find bar (or null if the window or tab is closed/closing in the interim).
      */
     async getFindBar(aTab = this.selectedTab) {
@@ -824,6 +844,7 @@
 
     /**
      * Create a findbar instance.
+     *
      * @param aTab the tab to create the find bar for.
      * @return the created findbar, or null if the window or tab is closed/closing.
      */
@@ -851,8 +872,8 @@
       return findBar;
     }
 
-    _appendStatusPanel() {
-      this.selectedBrowser.insertAdjacentElement("afterend", StatusPanel.panel);
+    appendStatusPanel(browser = this.selectedBrowser) {
+      browser.insertAdjacentElement("afterend", StatusPanel.panel);
     }
 
     _updateTabBarForPinnedTabs() {
@@ -1116,7 +1137,21 @@
           aTab.removeAttribute("image");
         }
         if (aIconURL) {
-          aTab.setAttribute("image", aIconURL);
+          let url = aIconURL;
+          if (
+            this._remoteSVGIconDecoding &&
+            url.startsWith(this.SVG_DATA_URI_PREFIX)
+          ) {
+            // 16px is hardcoded for .tab-icon-image in tabs.css
+            let size = Math.floor(16 * window.devicePixelRatio);
+            let params = new URLSearchParams({
+              url,
+              width: size,
+              height: size,
+            });
+            url = "moz-remote-image://?" + params;
+          }
+          aTab.setAttribute("image", url);
         } else {
           aTab.removeAttribute("image");
         }
@@ -1401,7 +1436,7 @@
       this._selectedTab = newTab;
       this.showTab(newTab);
 
-      this._appendStatusPanel();
+      this.appendStatusPanel();
 
       this._updateVisibleNotificationBox(newBrowser);
 
@@ -2577,6 +2612,7 @@
         // of those notifications can cause code to run that inspects our
         // state, so it is important that the tab element is fully
         // initialized by this point.
+        // AppendChild will cause a synchronous about:blank load.
         this.tabpanels.appendChild(panel);
       }
 
@@ -2850,6 +2886,7 @@
     /**
      * Must only be used sparingly for content that came from Chrome context
      * If in doubt use addWebTab
+     *
      * @param {string} aURI
      * @param {object} [options]
      * @see this.addTab options
@@ -3105,7 +3142,7 @@
           fromExternal,
           forceAllowDataURI,
           isCaptivePortalTab,
-          skipLoad,
+          skipLoad: skipLoad || uriIsAboutBlank,
           referrerInfo,
           charset,
           postData,
@@ -3163,10 +3200,10 @@
       if (elementIndex < 0) {
         return -1;
       }
-      if (elementIndex >= this.tabContainer.ariaFocusableItems.length) {
+      if (elementIndex >= this.tabContainer.dragAndDropElements.length) {
         return this.tabs.length;
       }
-      let element = this.tabContainer.ariaFocusableItems[elementIndex];
+      let element = this.tabContainer.dragAndDropElements[elementIndex];
       if (this.isTabGroupLabel(element)) {
         element = element.group.tabs[0];
       }
@@ -3187,6 +3224,7 @@
 
     /**
      * Adds a new tab split view.
+     *
      * @param {object[]} tabs
      *   The set of tabs to include in the split view.
      * @param {object} [options]
@@ -3221,11 +3259,16 @@
         return null;
       }
 
+      this.tabContainer.dispatchEvent(
+        new CustomEvent("SplitViewCreated", {
+          bubbles: true,
+        })
+      );
       return splitview;
     }
 
     /**
-     * Removes a tab from a split view wrapper. This also removes the split view wrapper component
+     * Removes all tabs from a split view wrapper. This also removes the split view wrapper component
      *
      * @param {MozTabSplitViewWrapper} [splitView]
      *   The split view to remove.
@@ -3243,6 +3286,7 @@
           )
         );
       }
+
       splitview.remove();
     }
 
@@ -3274,18 +3318,38 @@
     }
 
     /**
+     * Toggle split view active attribute
+     *
+     * @param {boolean} isActive
+     * @param {MozTabbrowserTab[]} tabs
+     */
+    setIsSplitViewActive(isActive, tabs) {
+      for (const tab of tabs) {
+        this.tabpanels.setSplitViewPanelActive(isActive, tab.linkedPanel);
+      }
+      this.tabpanels.isSplitViewActive = gBrowser.selectedTab.splitview;
+    }
+
+    /**
      * Ensures the split view footer exists for the given tab.
      *
      * @param {MozTabbrowserTab} tab
      */
     #insertSplitViewFooter(tab) {
       const panelEl = document.getElementById(tab.linkedPanel);
-      if (panelEl.querySelector("split-view-footer")) {
+      if (panelEl?.querySelector("split-view-footer")) {
         return;
       }
-      const footer = document.createXULElement("split-view-footer");
-      footer.setTab(tab);
-      panelEl.appendChild(footer);
+      if (panelEl) {
+        const footer = document.createXULElement("split-view-footer");
+        footer.setTab(tab);
+        panelEl.appendChild(footer);
+      }
+    }
+
+    openSplitViewMenu(anchorElement) {
+      const menu = document.getElementById("split-view-menu");
+      menu.openPopup(anchorElement, "after_start");
     }
 
     /**
@@ -3310,7 +3374,7 @@
      * Adds a new tab group.
      *
      * @param {object[]} tabs
-     *   The set of tabs to include in the group.
+     *   The set of tabs or split view to include in the group.
      * @param {object} [options]
      * @param {string} [options.id]
      *   Optionally assign an ID to the tab group. Useful when rebuilding an
@@ -3340,7 +3404,7 @@
      *   Defaults to "unknown".
      */
     addTabGroup(
-      tabs,
+      tabsAndSplitViews,
       {
         id = null,
         color = null,
@@ -3351,8 +3415,17 @@
         telemetryUserCreateSource = "unknown",
       } = {}
     ) {
-      if (!tabs?.length) {
-        throw new Error("Cannot create tab group with zero tabs");
+      if (
+        !tabsAndSplitViews?.length ||
+        tabsAndSplitViews.some(
+          tabOrSplitView =>
+            !this.isTab(tabOrSplitView) &&
+            !this.isSplitViewWrapper(tabOrSplitView)
+        )
+      ) {
+        throw new Error(
+          "Cannot create tab group with zero tabs or split views"
+        );
       }
 
       if (!color) {
@@ -3377,7 +3450,7 @@
         group,
         insertBefore?.group ?? insertBefore
       );
-      group.addTabs(tabs);
+      group.addTabs(tabsAndSplitViews);
 
       // Bail out if the group is empty at this point. This can happen if all
       // provided tabs are pinned and therefore cannot be grouped.
@@ -3497,6 +3570,19 @@
 
       this.#handleTabMove(tab, () =>
         gBrowser.tabContainer.insertBefore(tab, tab.group.nextElementSibling)
+      );
+    }
+
+    ungroupSplitView(splitView) {
+      if (!this.isSplitViewWrapper(splitView)) {
+        return;
+      }
+
+      this.#handleTabMove(splitView, () =>
+        gBrowser.tabContainer.insertBefore(
+          splitView,
+          splitView.tabs[0].group.nextElementSibling
+        )
       );
     }
 
@@ -3683,6 +3769,16 @@
       return t;
     }
 
+    /**
+     *
+     * @param {object} options
+     * @param {nsIPrincipal} [options.originPrincipal]
+     *   If uriString is given, uri might inherit principals, and no preloaded browser is used,
+     *   this is the origin principal to be inherited by the initial about:blank.
+     * @param {nsIPrincipal} [options.originStoragePrincipal]
+     *   If uriString is given, uri might inherit principals, and no preloaded browser is used,
+     *   this is the origin storage principal to be inherited by the initial about:blank.
+     */
     _createBrowserForTab(
       tab,
       {
@@ -3814,21 +3910,28 @@
         textDirectiveUserActivation,
       }
     ) {
-      if (
-        !usingPreloadedContent &&
-        originPrincipal &&
-        originStoragePrincipal &&
-        uriString
-      ) {
-        let { URI_INHERITS_SECURITY_CONTEXT } = Ci.nsIProtocolHandler;
-        // Unless we know for sure we're not inheriting principals,
-        // force the about:blank viewer to have the right principal:
-        if (!uri || doGetProtocolFlags(uri) & URI_INHERITS_SECURITY_CONTEXT) {
-          browser.createAboutBlankDocumentViewer(
-            originPrincipal,
-            originStoragePrincipal
-          );
+      const shouldInheritSecurityContext = (() => {
+        if (
+          !usingPreloadedContent &&
+          originPrincipal &&
+          originStoragePrincipal &&
+          uriString
+        ) {
+          let { URI_INHERITS_SECURITY_CONTEXT } = Ci.nsIProtocolHandler;
+          // Unless we know for sure we're not inheriting principals,
+          // force the about:blank viewer to have the right principal:
+          if (!uri || doGetProtocolFlags(uri) & URI_INHERITS_SECURITY_CONTEXT) {
+            return true;
+          }
         }
+        return false;
+      })();
+
+      if (shouldInheritSecurityContext) {
+        browser.createAboutBlankDocumentViewer(
+          originPrincipal,
+          originStoragePrincipal
+        );
       }
 
       // If we didn't swap docShells with a preloaded browser
@@ -3854,6 +3957,8 @@
         } else if (!triggeringPrincipal.isSystemPrincipal) {
           // XXX this code must be reviewed and changed when bug 1616353
           // lands.
+          // The purpose of LOAD_FLAGS_FIRST_LOAD is to close a new
+          // tab if it turns out to be a download.
           loadFlags |= LOAD_FLAGS_FIRST_LOAD;
         }
         if (!allowInheritPrincipal) {
@@ -4283,6 +4388,11 @@
             previousTab.pinned
           ) {
             elementIndex = Infinity;
+          } else if (previousTab.visible && previousTab.splitview) {
+            elementIndex =
+              this.tabContainer.dragAndDropElements.indexOf(
+                previousTab.splitview
+              ) + 1;
           } else if (previousTab.visible) {
             elementIndex = previousTab.elementIndex + 1;
           } else if (previousTab == FirefoxViewHandler.tab) {
@@ -4304,7 +4414,7 @@
       let allItems;
       let index;
       if (typeof elementIndex == "number") {
-        allItems = this.tabContainer.ariaFocusableItems;
+        allItems = this.tabContainer.dragAndDropElements;
         index = elementIndex;
       } else {
         allItems = this.tabs;
@@ -4323,6 +4433,8 @@
 
       if (pinned && !itemAfter?.pinned) {
         itemAfter = null;
+      } else if (itemAfter?.splitview) {
+        itemAfter = itemAfter.splitview?.nextElementSibling || null;
       }
       // Prevent a flash of unstyled content by setting up the tab content
       // and inherited attributes before appending it (see Bug 1592054):
@@ -4331,7 +4443,10 @@
       this.tabContainer._invalidateCachedTabs();
 
       if (tabGroup) {
-        if (this.isTab(itemAfter) && itemAfter.group == tabGroup) {
+        if (
+          (this.isTab(itemAfter) && itemAfter.group == tabGroup) ||
+          this.isSplitViewWrapper(itemAfter)
+        ) {
           // Place at the front of, or between tabs in, the same tab group
           this.tabContainer.insertBefore(tab, itemAfter);
         } else {
@@ -4359,6 +4474,13 @@
           ? this.tabContainer.pinnedTabsContainer
           : this.tabContainer;
         tabContainer.insertBefore(tab, itemAfter);
+      }
+
+      if (tab.group?.collapsed) {
+        // Bug 1997096: automatically expand the group if we are adding a new
+        // tab to a collapsed group, and that tab does not have automatic focus
+        // (i.e. if the user right clicks and clicks "Open in New Tab")
+        tab.group.collapsed = false;
       }
 
       this._updateTabsAfterInsert();
@@ -4845,6 +4967,7 @@
      * Given an array of tabs, returns a tuple [groups, leftoverTabs] such that:
      *  - groups contains all groups whose tabs are a subset of the initial array
      *  - leftoverTabs contains the remaining tabs
+     *
      * @param {Array} tabs list of tabs
      * @returns {Array} a tuple where the first element is an array of groups
      *                  and the second is an array of tabs
@@ -4856,6 +4979,7 @@
        * of how many tabs in the tab group will be left after removing `tabs`.
        * For any tab group with 0 surviving tabs, we can know that that tab
        * group will be removed as a consequence of removing these `tabs`.
+       *
        * @type {Map<MozTabbrowserTabGroup, Set<MozTabbrowserTab>>}
        */
       let tabGroupSurvivingTabs = new Map();
@@ -5624,6 +5748,7 @@
 
     /**
      * Handles opening a new tab with mouse middleclick.
+     *
      * @param node
      * @param event
      *        The click event
@@ -5648,6 +5773,7 @@
 
     /**
      * Finds the tab that we will blur to if we blur aTab.
+     *
      * @param   {MozTabbrowserTab} aTab
      *          The tab we would blur
      * @param   {MozTabbrowserTab[]} [aExcludeTabs=[]]
@@ -6373,7 +6499,7 @@
      *   The desired position, expressed as the index within the `tabs` array.
      * @param {number} [options.elementIndex]
      *   The desired position, expressed as the index within the
-     *   `MozTabbrowserTabs::ariaFocusableItems` array.
+     *   `MozTabbrowserTabs::dragAndDropElements` array.
      * @param {boolean} [options.forceUngrouped=false]
      *   Force `element` to move into position as a standalone tab, overriding
      *   any possibility of entering a tab group. For example, setting `true`
@@ -6606,7 +6732,7 @@
      * @param {MozTabbrowserTabGroup} aGroup
      * @param {TabMetricsContext} [metricsContext]
      */
-    moveTabToGroup(aTab, aGroup, metricsContext) {
+    moveTabToExistingGroup(aTab, aGroup, metricsContext) {
       if (!this.isTab(aTab)) {
         throw new Error("Can only move a tab into a tab group");
       }
@@ -6635,6 +6761,32 @@
         );
         this.removeFromMultiSelectedTabs(aTab);
         this.tabContainer._notifyBackgroundTab(aTab);
+      }
+    }
+
+    /**
+     *
+     * @param {MozSplitViewWrapper} aSplitView
+     * @param {MozTabbrowserTabGroup} aGroup
+     * @param {TabMetricsContext} [metricsContext]
+     */
+    moveSplitViewToExistingGroup(aSplitView, aGroup, metricsContext = null) {
+      if (!this.isSplitViewWrapper(aSplitView)) {
+        throw new Error("Can only move a split view into a tab group");
+      }
+      if (aSplitView.group && aSplitView.group.id === aGroup.id) {
+        return;
+      }
+
+      let splitViewTabs = aSplitView.tabs;
+      this.#handleTabMove(
+        aSplitView,
+        () => aGroup.appendChild(aSplitView),
+        metricsContext
+      );
+      for (const splitViewTab of splitViewTabs) {
+        this.removeFromMultiSelectedTabs(splitViewTab);
+        this.tabContainer._notifyBackgroundTab(splitViewTab);
       }
     }
 
@@ -6700,7 +6852,7 @@
     }
 
     /**
-     * @param {MozTabbrowserTab|MozTabbrowserTabGroup} element
+     * @param {MozTabbrowserTab|MozTabbrowserTabGroup|MozTabSplitViewWrapper} element
      * @param {function():void} moveActionCallback
      * @param {TabMetricsContext} [metricsContext]
      */
@@ -6785,7 +6937,7 @@
       let nextElement;
       if (typeof elementIndex == "number") {
         index = elementIndex;
-        nextElement = this.tabContainer.ariaFocusableItems.at(elementIndex);
+        nextElement = this.tabContainer.dragAndDropElements.at(elementIndex);
       } else {
         index = tabIndex;
         nextElement = this.tabs.at(tabIndex);
@@ -6814,15 +6966,10 @@
         // new tab must have the same usercontextid as the old one
         params.userContextId = aTab.getAttribute("usercontextid");
       }
+      params.skipLoad = true;
       let newTab = this.addWebTab("about:blank", params);
-      let newBrowser = this.getBrowserForTab(newTab);
 
       aTab.container.tabDragAndDrop.finishAnimateTabMove();
-
-      if (!createLazyBrowser) {
-        // Stop the about:blank load.
-        newBrowser.stop();
-      }
 
       if (!this.swapBrowsersAndCloseOther(newTab, aTab)) {
         // Swapping wasn't permitted. Bail out.
@@ -7692,10 +7839,10 @@
           break;
         }
         case "TabSplitViewActivate":
-          this.#activeSplitView = aEvent.originalTarget;
+          this.#activeSplitView = aEvent.detail.splitview;
           break;
         case "TabSplitViewDeactivate":
-          if (this.#activeSplitView === aEvent.originalTarget) {
+          if (this.#activeSplitView === aEvent.detail.splitview) {
             this.#activeSplitView = null;
           }
           break;
@@ -8281,6 +8428,20 @@
         const { url, description, previewImageURL } = event.detail;
         this.setPageInfo(tab, url, description, previewImageURL);
       });
+
+      this.splitViewCommandSet.addEventListener("command", event => {
+        switch (event.target.id) {
+          case "splitViewCmd_separateTabs":
+            this.#activeSplitView.unsplitTabs();
+            break;
+          case "splitViewCmd_reverseTabs":
+            this.#activeSplitView.reverseTabs();
+            break;
+          case "splitViewCmd_closeTabs":
+            this.#activeSplitView.close();
+            break;
+        }
+      });
     }
 
     translateTabContextMenu() {
@@ -8639,16 +8800,15 @@
             // before the location changed.
 
             this.mBrowser.userTypedValue = null;
-            // When browser.tabs.documentchannel.parent-controlled pref and SHIP
-            // are enabled and a load gets cancelled due to another one
+            // When SHIP is enabled and a load gets cancelled due to another one
             // starting, the error is NS_BINDING_CANCELLED_OLD_LOAD.
             // When these prefs are not enabled, the error is different and
             // that's why we still want to look at the isNavigating flag.
             // We could add a workaround and make sure that in the alternative
             // codepaths we would also omit the same error, but considering
             // how we will be enabling fission by default soon, we can keep
-            // using isNavigating for now, and remove it when the
-            // parent-controlled pref and SHIP are enabled by default.
+            // using isNavigating for now, and remove it when SHIP is enabled
+            // by default.
             // Bug 1725716 has been filed to consider removing isNavigating
             // field alltogether.
             let isNavigating = this.mBrowser.isNavigating;
@@ -9008,6 +9168,7 @@
      * Handles URIs when we want to deal with them in chrome code rather than pass
      * them down to a content browser. This can avoid unnecessary process switching
      * for the browser.
+     *
      * @param aBrowser the browser that is attempting to load the URI
      * @param aUri the nsIURI that is being loaded
      * @returns true if the URI is handled, otherwise false
@@ -9389,6 +9550,7 @@ var TabContextMenu = {
       }
     });
   },
+  // eslint-disable-next-line complexity
   updateContextMenu(aPopupMenu) {
     let triggerTab =
       aPopupMenu.triggerNode &&
@@ -9402,15 +9564,24 @@ var TabContextMenu = {
       ? gBrowser.selectedTabs
       : [this.contextTab];
 
+    let splitViews = new Set();
     // bug1973996: This call is not guaranteed to complete
     // before the saved groups menu is populated
     for (let tab of this.contextTabs) {
       gBrowser.TabStateFlusher.flush(tab.linkedBrowser);
+
+      // Add unique split views for count info below
+      if (tab.splitview) {
+        splitViews.add(tab.splitview);
+      }
     }
 
     let disabled = gBrowser.tabs.length == 1;
     let tabCountInfo = JSON.stringify({
       tabCount: this.contextTabs.length,
+    });
+    let splitViewCountInfo = JSON.stringify({
+      splitViewCount: splitViews.size,
     });
 
     var menuItems = aPopupMenu.getElementsByAttribute(
@@ -9461,6 +9632,15 @@ var TabContextMenu = {
       "context_moveTabToGroup"
     );
     let contextUngroupTab = document.getElementById("context_ungroupTab");
+    let contextMoveSplitViewToNewGroup = document.getElementById(
+      "context_moveSplitViewToNewGroup"
+    );
+    let contextUngroupSplitView = document.getElementById(
+      "context_ungroupSplitView"
+    );
+    let isAllSplitViewTabs = this.contextTabs.every(
+      contextTab => contextTab.splitview
+    );
 
     if (gBrowser._tabGroupsEnabled) {
       let selectedGroupCount = new Set(
@@ -9495,13 +9675,43 @@ var TabContextMenu = {
       }
 
       if (!openGroupsToMoveTo.length && !savedGroupsToMoveTo.length) {
-        contextMoveTabToGroup.hidden = true;
-        contextMoveTabToNewGroup.hidden = false;
-        contextMoveTabToNewGroup.setAttribute("data-l10n-args", tabCountInfo);
+        if (isAllSplitViewTabs) {
+          contextMoveTabToGroup.hidden = true;
+          contextMoveTabToNewGroup.hidden = true;
+          contextMoveSplitViewToNewGroup.hidden = false;
+          contextMoveSplitViewToNewGroup.setAttribute(
+            "data-l10n-args",
+            splitViewCountInfo
+          );
+        } else {
+          contextMoveTabToGroup.hidden = true;
+          contextMoveSplitViewToNewGroup.hidden = true;
+          contextMoveTabToNewGroup.hidden = false;
+          contextMoveTabToNewGroup.setAttribute("data-l10n-args", tabCountInfo);
+        }
       } else {
-        contextMoveTabToNewGroup.hidden = true;
-        contextMoveTabToGroup.hidden = false;
-        contextMoveTabToGroup.setAttribute("data-l10n-args", tabCountInfo);
+        if (isAllSplitViewTabs) {
+          contextMoveTabToNewGroup.hidden = true;
+          contextMoveSplitViewToNewGroup.hidden = true;
+          contextMoveTabToGroup.hidden = false;
+          contextMoveTabToGroup.setAttribute(
+            "data-l10n-id",
+            "tab-context-move-split-view-to-group"
+          );
+          contextMoveTabToGroup.setAttribute(
+            "data-l10n-args",
+            splitViewCountInfo
+          );
+        } else {
+          contextMoveTabToNewGroup.hidden = true;
+          contextMoveSplitViewToNewGroup.hidden = true;
+          contextMoveTabToGroup.hidden = false;
+          contextMoveTabToGroup.setAttribute(
+            "data-l10n-id",
+            "tab-context-move-tab-to-group"
+          );
+          contextMoveTabToGroup.setAttribute("data-l10n-args", tabCountInfo);
+        }
 
         const openGroupsMenu = contextMoveTabToGroup.querySelector("menupopup");
         openGroupsMenu
@@ -9541,15 +9751,39 @@ var TabContextMenu = {
         }
       }
 
-      contextUngroupTab.hidden = !selectedGroupCount;
       let groupInfo = JSON.stringify({
         groupCount: selectedGroupCount,
       });
-      contextUngroupTab.setAttribute("data-l10n-args", groupInfo);
+      if (isAllSplitViewTabs) {
+        contextUngroupSplitView.hidden = !selectedGroupCount;
+        contextUngroupTab.hidden = true;
+        contextUngroupSplitView.setAttribute("data-l10n-args", groupInfo);
+      } else {
+        contextUngroupTab.hidden = !selectedGroupCount;
+        contextUngroupSplitView.hidden = true;
+        contextUngroupTab.setAttribute("data-l10n-args", groupInfo);
+      }
     } else {
       contextMoveTabToNewGroup.hidden = true;
       contextMoveTabToGroup.hidden = true;
       contextUngroupTab.hidden = true;
+      contextMoveSplitViewToNewGroup.hidden = true;
+      contextUngroupSplitView.hidden = true;
+    }
+
+    let contextAddNote = document.getElementById("context_addNote");
+    let contextEditNote = document.getElementById("context_editNote");
+    if (gBrowser._tabNotesEnabled) {
+      let noteURL = this.contextTab.canonicalUrl;
+      contextAddNote.disabled = !noteURL;
+
+      this.TabNotes.has(noteURL).then(hasNote => {
+        contextAddNote.hidden = hasNote;
+        contextEditNote.hidden = !hasNote;
+      });
+    } else {
+      contextAddNote.hidden = true;
+      contextEditNote.hidden = true;
     }
 
     // Split View
@@ -9796,7 +10030,7 @@ var TabContextMenu = {
 
     SharingUtils.updateShareURLMenuItem(
       this.contextTab.linkedBrowser,
-      document.getElementById("context_sendTabToDevice")
+      document.getElementById("context_moveTabOptions")
     );
   },
 
@@ -9960,10 +10194,44 @@ var TabContextMenu = {
     let insertBefore = this.contextTab;
     if (insertBefore._tPos < gBrowser.pinnedTabCount) {
       insertBefore = gBrowser.tabs[gBrowser.pinnedTabCount];
+    } else if (this.contextTab.group) {
+      insertBefore = this.contextTab.group;
     } else if (this.contextTab.splitview) {
       insertBefore = this.contextTab.splitview;
     }
     gBrowser.addTabGroup(this.contextTabs, {
+      insertBefore,
+      isUserTriggered: true,
+      telemetryUserCreateSource: "tab_menu",
+    });
+    gBrowser.selectedTab = this.contextTabs[0];
+
+    // When using the tab context menu to create a group from the all tabs
+    // panel, make sure we close that panel so that it doesn't obscure the tab
+    // group creation panel.
+    gTabsPanel.hideAllTabsPanel();
+  },
+
+  moveSplitViewToNewGroup() {
+    let insertBefore = this.contextTab;
+    if (insertBefore._tPos < gBrowser.pinnedTabCount) {
+      insertBefore = gBrowser.tabs[gBrowser.pinnedTabCount];
+    } else if (this.contextTab.group) {
+      insertBefore = this.contextTab.group;
+    } else if (this.contextTab.splitview) {
+      insertBefore = this.contextTab.splitview;
+    }
+    let tabsAndSplitViews = [];
+    for (const contextTab of this.contextTabs) {
+      if (contextTab.splitView) {
+        if (!tabsAndSplitViews.includes(contextTab.splitView)) {
+          tabsAndSplitViews.push(contextTab.splitView);
+        }
+      } else {
+        tabsAndSplitViews.push(contextTab);
+      }
+    }
+    gBrowser.addTabGroup(tabsAndSplitViews, {
       insertBefore,
       isUserTriggered: true,
       telemetryUserCreateSource: "tab_menu",
@@ -10006,6 +10274,16 @@ var TabContextMenu = {
     }
   },
 
+  ungroupSplitViews() {
+    let splitViews = new Set();
+    for (const tab of this.contextTabs) {
+      if (!splitViews.has(tab.splitview)) {
+        splitViews.add(tab.splitview);
+        gBrowser.ungroupSplitView(tab.splitview);
+      }
+    }
+  },
+
   moveTabsToSplitView() {
     let insertBefore = this.contextTabs.includes(gBrowser.selectedTab)
       ? gBrowser.selectedTab
@@ -10022,7 +10300,7 @@ var TabContextMenu = {
     let newTab = null;
     if (this.contextTabs.length < 2) {
       // Open new tab to split with context tab
-      newTab = gBrowser.addTrustedTab(BROWSER_NEW_TAB_URL);
+      newTab = gBrowser.addTrustedTab("about:opentabs");
       tabsToAdd = [this.contextTabs[0], newTab];
     }
 
@@ -10058,4 +10336,5 @@ var TabContextMenu = {
 
 ChromeUtils.defineESModuleGetters(TabContextMenu, {
   GenAI: "resource:///modules/GenAI.sys.mjs",
+  TabNotes: "moz-src:///browser/components/tabnotes/TabNotes.sys.mjs",
 });

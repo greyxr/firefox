@@ -36,6 +36,7 @@ task-defaults:
     treeherder:
         kind: test
         tier: 1
+    run-on-repo-type: [hg]
     run:
         using: mach
         use-caches: [checkout, pip, uv]
@@ -392,11 +393,14 @@ mozbuild:
             by-platform:
                 linux2404-64/opt:
                     - linux64-node
+                    - terser
                 macosx1470-64/opt:
                     - macosx64-node
+                    - terser
                 windows11-64/opt:
                     - win64-node
                     - win64-mozmake
+                    - terser
     when:
         files-changed:
             - '**/moz.configure'
@@ -539,19 +543,18 @@ condprof:
             - 'testing/condprofile/condprof**'
             - 'testing/condprofile/setup.py'
 
-skip-fails:
-    description: testing/skip-fails unit tests
+manifest:
+    description: testing/manifest unit tests
     always-target: false
     use-python: "3.11"
     treeherder:
-        symbol: sf
+        symbol: mf
     run:
         using: python-test
-        subsuite: skip-fails
+        subsuite: manifest
     when:
         files-changed:
-            - 'testing/skipfails.py'
-            - 'testing/test/**'
+            - 'testing/manifest/**'
 
 talos:
     description: testing/talos unit tests

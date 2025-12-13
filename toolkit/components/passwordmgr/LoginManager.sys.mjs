@@ -354,9 +354,9 @@ LoginManager.prototype = {
   /**
    * Get a list of all origins for which logins are disabled.
    *
-   * @param {Number} count - only needed for XPCOM.
+   * @param {number} count - only needed for XPCOM.
    *
-   * @return {String[]} of disabled origins. If there are no disabled origins,
+   * @return {string[]} of disabled origins. If there are no disabled origins,
    *                    the array is empty.
    */
   getAllDisabledHosts() {
@@ -397,8 +397,10 @@ LoginManager.prototype = {
       `Searching for matching logins for origin: ${matchData.origin}`
     );
 
-    if (!matchData.origin) {
-      throw new Error("searchLoginsAsync: An `origin` is required");
+    if (!matchData.guid && !matchData.origin) {
+      lazy.log.warn(
+        "A `guid` or `origin` field is recommended for searchLoginsAsync matchData."
+      );
     }
 
     return this._storage.searchLoginsAsync(matchData);
@@ -406,6 +408,7 @@ LoginManager.prototype = {
 
   /**
    * @return {nsILoginInfo[]} which are decrypted.
+   * Deprecated: use searchLoginsAsync instead
    */
   searchLogins(matchData) {
     lazy.log.debug(

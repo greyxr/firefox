@@ -16,7 +16,6 @@ import mozilla.components.lib.state.Store
  * [reducer].
  */
 internal class ReducerChainBuilder<S : State, A : Action>(
-    private val storeDispatcher: StoreDispatcher,
     private val reducer: Reducer<S, A>,
     private val middleware: List<Middleware<S, A>>,
 ) {
@@ -39,10 +38,6 @@ internal class ReducerChainBuilder<S : State, A : Action>(
             override val state: S
                 get() = store.state
 
-            override fun dispatch(action: A) {
-                get(store).invoke(action)
-            }
-
             override val store: Store<S, A>
                 get() = store
         }
@@ -52,12 +47,7 @@ internal class ReducerChainBuilder<S : State, A : Action>(
             store.transitionTo(state)
         }
 
-        val threadCheck: Middleware<S, A> = { _, next, action ->
-            storeDispatcher.assertOnThread()
-            next(action)
-        }
-
-        (middleware.reversed() + threadCheck).forEach { middleware ->
+        middleware.reversed().forEach { middleware ->
             val next = chain
             chain = { action -> middleware(context, next, action) }
         }

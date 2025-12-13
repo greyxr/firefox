@@ -301,7 +301,8 @@ class SettingsSubMenuAddonsManagerRobot {
         verifyTheRecommendedAddons(composeTestRule)
         Log.i(TAG, "verifyRecommendedAddonsViewFromRedesignedMainMenu: Trying to verify that that the \"Discover more extensions\" button is displayed")
         composeTestRule.onNode(
-            hasText(getStringResource(R.string.browser_menu_discover_more_extensions)), useUnmergedTree = true,
+            hasText(getStringResource(R.string.browser_menu_discover_more_extensions)),
+            useUnmergedTree = true,
         ).assertIsDisplayed()
         Log.i(TAG, "verifyRecommendedAddonsViewFromRedesignedMainMenu: Verified that that the \"Discover more extensions\" button is displayed")
     }
@@ -376,6 +377,16 @@ class SettingsSubMenuAddonsManagerRobot {
                 Log.i(TAG, "verifyTheRecommendedAddons: AssertionError caught, executing fallback methods")
                 if (i == RETRY_COUNT) {
                     throw e
+                } else {
+                    Log.i(TAG, "verifyTheRecommendedAddons: Trying to click device back button to dismiss the main menu")
+                    mDevice.pressBack()
+                    Log.i(TAG, "verifyTheRecommendedAddons: Clicked device back button to dismiss the main menu")
+                    waitForAppWindowToBeUpdated()
+                    browserScreen {
+                    }.openThreeDotMenu(composeTestRule) {
+                        verifyTryRecommendedExtensionButton()
+                    }.openExtensionsFromMainMenu {
+                    }
                 }
             }
         }

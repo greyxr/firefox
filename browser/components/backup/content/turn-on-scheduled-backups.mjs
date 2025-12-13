@@ -57,6 +57,11 @@ export default class TurnOnScheduledBackups extends MozLitElement {
       reflect: true,
       attribute: "hide-secondary-button",
     },
+    backupIsEncrypted: {
+      type: Boolean,
+      reflect: true,
+      attribute: "backup-is-encrypted",
+    },
     filePathLabelL10nId: {
       type: String,
       reflect: true,
@@ -120,6 +125,7 @@ export default class TurnOnScheduledBackups extends MozLitElement {
     this._showPasswordOptions = false;
     this._passwordsMatch = false;
     this.enableBackupErrorCode = 0;
+    this.disableSubmit = false;
   }
 
   connectedCallback() {
@@ -145,6 +151,20 @@ export default class TurnOnScheduledBackups extends MozLitElement {
       this._newPath = path;
       this._newLabel = filename;
       this._newIconURL = iconURL;
+
+      if (this.embeddedFxBackupOptIn) {
+        // Let's set a persistent path
+        this.dispatchEvent(
+          new CustomEvent("BackupUI:SetEmbeddedComponentPersistentData", {
+            bubbles: true,
+            detail: {
+              path,
+              label: filename,
+              iconURL,
+            },
+          })
+        );
+      }
     } else if (event.type == "ValidPasswordsDetected") {
       let { password } = event.detail;
       this._passwordsMatch = true;
@@ -185,23 +205,30 @@ export default class TurnOnScheduledBackups extends MozLitElement {
   }
 
   handleConfirm() {
-    let detail;
-    if (this._newPath) {
-      detail = {
-        parentDirPath: this._newPath,
-      };
-    } else if (this.backupServiceState?.backupDirPath) {
-      detail = {
-        parentDirPath: this.backupServiceState?.backupDirPath,
-      };
-    } else {
-      detail = {
-        parentDirPath: this.defaultPath,
-      };
-    }
+    let detail = {
+      parentDirPath: this._newPath || this.defaultPath,
+    };
 
     if (this._showPasswordOptions && this._passwordsMatch) {
       detail.password = this._inputPassValue;
+    }
+
+    if (this.embeddedFxBackupOptIn && this.backupIsEncrypted) {
+      if (!detail.password) {
+        // We're in the embedded component and we haven't set a password yet
+        // when one is expected, let's not do a confirm action yet!
+        this.dispatchEvent(
+          new CustomEvent("SpotlightOnboardingAdvanceScreens", {
+            bubbles: true,
+          })
+        );
+        return;
+      }
+
+      // The persistent data will take precedence over the default path
+      detail.parentDirPath =
+        this.backupServiceState?.embeddedComponentPersistentData?.path ||
+        detail.parentDirPath;
     }
 
     this.dispatchEvent(
@@ -237,6 +264,7 @@ export default class TurnOnScheduledBackups extends MozLitElement {
     this._passwordsMatch = false;
     this._inputPassValue = "";
     this.enableBackupErrorCode = 0;
+    this.disableSubmit = false;
     // we don't want to reset the path when embedded in the spotlight
     if (!this.embeddedFxBackupOptIn) {
       this._newPath = "";
@@ -248,6 +276,17 @@ export default class TurnOnScheduledBackups extends MozLitElement {
       /** @type {import("./password-validation-inputs.mjs").default} */
       const passwordElement = this.passwordOptionsExpandedEl;
       passwordElement.reset();
+    }
+
+    if (
+      this.embeddedFxBackupOptIn &&
+      this.backupServiceState?.embeddedComponentPersistentData
+    ) {
+      this.dispatchEvent(
+        new CustomEvent("BackupUI:FlushEmbeddedComponentPersistentData", {
+          bubbles: true,
+        })
+      );
     }
   }
 
@@ -270,15 +309,25 @@ export default class TurnOnScheduledBackups extends MozLitElement {
           ? "turn-on-scheduled-backups-location-default-folder"
           : nothing}
         data-l10n-args=${hasFilename ? l10nArgs : nothing}
-        data-l10n-attrs=${hasFilename ? "value" : "placeholder"}
+        data-l10n-attrs=${hasFilename ? "value" : nothing}
         style=${`background-image: url(${iconURL})`}
       />
     `;
   }
 
+  /**
+   * Note: We also consider the embeddedComponentPersistentData since we might be in the
+   *    Spotlight where we need this persistent data between screens. This state property should
+   *    not be set if we are not in the Spotlight.
+   */
   customFilePathInputTemplate() {
-    let filename = this._newLabel;
-    let iconURL = this._newIconURL || this.#placeholderIconURL;
+    let filename =
+      this._newLabel ||
+      this.backupServiceState?.embeddedComponentPersistentData?.label;
+    let iconURL =
+      this._newIconURL ||
+      this.backupServiceState?.embeddedComponentPersistentData?.iconURL ||
+      this.#placeholderIconURL;
 
     return html`
       <input
@@ -313,7 +362,8 @@ export default class TurnOnScheduledBackups extends MozLitElement {
             "turn-on-scheduled-backups-location-label"}
           ></label>
           <div id="backup-location-filepicker">
-            ${!this._newPath
+            ${!this._newPath &&
+            !this.backupServiceState?.embeddedComponentPersistentData?.path
               ? this.defaultFilePathInputTemplate()
               : this.customFilePathInputTemplate()}
             <moz-button
@@ -367,6 +417,23 @@ export default class TurnOnScheduledBackups extends MozLitElement {
   }
 
   contentTemplate() {
+    const hasEmbeddedPersistentData =
+      this.embeddedFxBackupOptIn &&
+      this.backupServiceState?.embeddedComponentPersistentData?.path;
+    // All the situations where we want to disable submit:
+    // - passwords don't match
+    // - there's no destination folder
+    // - other unknown errors
+    if (
+      (this._showPasswordOptions && !this._passwordsMatch) ||
+      (!this._newPath && !this.defaultLabel && !hasEmbeddedPersistentData) ||
+      this.enableBackupErrorCode != ERRORS.NONE
+    ) {
+      this.disableSubmit = true;
+    } else {
+      this.disableSubmit = false;
+    }
+
     return html`
       <form
         id="backup-turn-on-scheduled-wrapper"
@@ -412,7 +479,7 @@ export default class TurnOnScheduledBackups extends MozLitElement {
             type="primary"
             data-l10n-id=${this.turnOnBackupConfirmBtnL10nId ||
             "turn-on-scheduled-backups-confirm-button"}
-            ?disabled=${this._showPasswordOptions && !this._passwordsMatch}
+            ?disabled=${this.disableSubmit}
           ></moz-button>
         </moz-button-group>
       </form>

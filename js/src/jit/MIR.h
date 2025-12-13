@@ -26,7 +26,6 @@
 #endif
 
 #include <algorithm>
-#include <initializer_list>
 
 #include "NamespaceImports.h"
 
@@ -75,6 +74,7 @@ bool CurrentThreadIsIonCompiling();
 namespace jit {
 
 class CallInfo;
+class ShapeListSnapshot;
 
 #ifdef JS_JITSPEW
 // Helper for debug printing.  Avoids creating a MIR.h <--> MIRGraph.h cycle.
@@ -1363,6 +1363,22 @@ enum class MemoryBarrierRequirement : bool {
   NotRequired,
   Required,
 };
+
+inline Synchronization SynchronizeLoad(
+    MemoryBarrierRequirement requiresBarrier) {
+  if (requiresBarrier == MemoryBarrierRequirement::Required) {
+    return Synchronization::Load();
+  }
+  return Synchronization::None();
+}
+
+inline Synchronization SynchronizeStore(
+    MemoryBarrierRequirement requiresBarrier) {
+  if (requiresBarrier == MemoryBarrierRequirement::Required) {
+    return Synchronization::Store();
+  }
+  return Synchronization::None();
+}
 
 MIR_OPCODE_CLASS_GENERATED
 
@@ -9710,6 +9726,7 @@ class MObjectToIterator : public MUnaryInstruction,
                           public ObjectPolicy<0>::Data {
   NativeIteratorListHead* enumeratorsAddr_;
   bool wantsIndices_ = false;
+  bool skipRegistration_ = false;
 
   explicit MObjectToIterator(MDefinition* object,
                              NativeIteratorListHead* enumeratorsAddr)
@@ -9724,8 +9741,17 @@ class MObjectToIterator : public MUnaryInstruction,
   TRIVIAL_NEW_WRAPPERS
   NAMED_OPERANDS((0, object))
 
+  AliasSet getAliasSet() const override {
+    return skipRegistration_
+               ? AliasSet::Load(AliasSet::ObjectFields | AliasSet::Element)
+               : AliasSet::Store(AliasSet::Any);
+  }
+
   bool wantsIndices() const { return wantsIndices_; }
   void setWantsIndices(bool value) { wantsIndices_ = value; }
+
+  bool skipRegistration() const { return skipRegistration_; }
+  void setSkipRegistration(bool value) { skipRegistration_ = value; }
 };
 
 class MPostIntPtrConversion : public MUnaryInstruction,

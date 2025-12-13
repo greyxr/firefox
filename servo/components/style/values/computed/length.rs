@@ -9,11 +9,11 @@ use crate::logical_geometry::PhysicalSide;
 use crate::values::animated::{Context as AnimatedContext, ToAnimatedValue};
 use crate::values::computed::position::TryTacticAdjustment;
 use crate::values::computed::{NonNegativeNumber, Percentage, Zoom};
-use crate::values::generics::length as generics;
 use crate::values::generics::length::{
     GenericLengthOrNumber, GenericLengthPercentageOrNormal, GenericMaxSize, GenericSize,
 };
 use crate::values::generics::NonNegative;
+use crate::values::generics::{length as generics, ClampToNonNegative};
 use crate::values::resolved::{Context as ResolvedContext, ToResolvedValue};
 use crate::values::specified::length::{AbsoluteLength, FontBaseSize, LineHeightBase};
 use crate::values::{specified, CSSFloat};
@@ -21,7 +21,7 @@ use crate::Zero;
 use app_units::Au;
 use std::fmt::{self, Write};
 use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
-use style_traits::{CSSPixel, CssWriter, ToCss};
+use style_traits::{CSSPixel, CssString, CssWriter, NumericValue, ToCss, ToTyped, TypedValue};
 
 pub use super::image::Image;
 pub use super::length_percentage::{LengthPercentage, NonNegativeLengthPercentage};
@@ -181,7 +181,6 @@ impl NonNegativeLengthPercentageOrAuto {
     ToAnimatedZero,
     ToComputedValue,
     ToShmem,
-    ToTyped,
 )]
 #[repr(C)]
 pub struct CSSPixelLength(CSSFloat);
@@ -333,6 +332,15 @@ impl ToCss for CSSPixelLength {
     }
 }
 
+impl ToTyped for CSSPixelLength {
+    fn to_typed(&self) -> Option<TypedValue> {
+        Some(TypedValue::Numeric(NumericValue::Unit {
+            value: self.0 as f32,
+            unit: CssString::from("px"),
+        }))
+    }
+}
+
 impl std::iter::Sum for CSSPixelLength {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Length::zero(), Add::add)
@@ -450,17 +458,9 @@ pub type LengthOrNumber = GenericLengthOrNumber<Length, Number>;
 /// A wrapper of Length, whose value must be >= 0.
 pub type NonNegativeLength = NonNegative<Length>;
 
-impl ToAnimatedValue for NonNegativeLength {
-    type AnimatedValue = Length;
-
-    #[inline]
-    fn to_animated_value(self, context: &AnimatedContext) -> Self::AnimatedValue {
-        self.0.to_animated_value(context)
-    }
-
-    #[inline]
-    fn from_animated_value(animated: Self::AnimatedValue) -> Self {
-        NonNegativeLength::new(animated.px().max(0.))
+impl ClampToNonNegative for Length {
+    fn clamp_to_non_negative(self) -> Self {
+        Self::new(self.px().max(0.))
     }
 }
 

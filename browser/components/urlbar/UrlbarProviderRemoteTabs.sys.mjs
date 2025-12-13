@@ -167,12 +167,11 @@ export class UrlbarProviderRemoteTabs extends UrlbarProvider {
   }
 
   /**
-   * Starts querying. Extended classes should return a Promise resolved when the
-   * provider is done searching AND returning results.
+   * Starts querying.
    *
-   * @param {UrlbarQueryContext} queryContext The query context object
-   * @param {Function} addCallback Callback invoked by the provider to add a new
-   *        result. A UrlbarResult should be passed to it.
+   * @param {UrlbarQueryContext} queryContext
+   * @param {(provider: UrlbarProvider, result: UrlbarResult) => void} addCallback
+   *   Callback invoked by the provider to add a new result.
    */
   async startQuery(queryContext, addCallback) {
     let instance = this.queryInstance;
@@ -209,13 +208,17 @@ export class UrlbarProviderRemoteTabs extends UrlbarProvider {
         let result = new lazy.UrlbarResult({
           type: UrlbarUtils.RESULT_TYPE.REMOTE_TAB,
           source: UrlbarUtils.RESULT_SOURCE.TABS,
-          ...lazy.UrlbarResult.payloadAndSimpleHighlights(queryContext.tokens, {
-            url: [tab.url, UrlbarUtils.HIGHLIGHT.TYPED],
-            title: [tab.title, UrlbarUtils.HIGHLIGHT.TYPED],
+          payload: {
+            url: tab.url,
+            title: tab.title,
             device: client.name,
             icon: lazy.showRemoteIconsPref ? tab.icon : "",
             lastUsed: (tab.lastUsed || 0) * 1000,
-          }),
+          },
+          highlights: {
+            url: UrlbarUtils.HIGHLIGHT.TYPED,
+            title: UrlbarUtils.HIGHLIGHT.TYPED,
+          },
         });
 
         // We want to return the most relevant remote tabs and thus the most

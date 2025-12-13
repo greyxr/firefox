@@ -207,7 +207,22 @@ bool nsLocalFile::CheckForReservedFileName(const nsString& aFileName) {
 bool nsLocalFile::ChildAclMatchesAclInheritedFromParent(
     const NotNull<ACL*> aChildDacl, bool aIsChildDir,
     const AutoFreeSecurityDescriptor& aChildSecDesc, nsIFile* aParentDir) {
-  // If we fail at any point return false.
+  // If the child inherits no ACEs or we fail at any point return false.
+  auto getInheritedAceCount = [](const ACL* aAcl) {
+    AclAceRange aclAceRange(WrapNotNull(aAcl));
+    return std::count_if(
+        aclAceRange.begin(), aclAceRange.end(),
+        [](const auto& hdr) { return hdr.AceFlags & INHERITED_ACE; });
+  };
+
+  auto childInheritedCount = getInheritedAceCount(aChildDacl);
+  if (childInheritedCount == 0) {
+    // This could happen if aParentDir has no inheritable ACEs, but that should
+    // be rare and returning false here ensures that the file will get its ACL
+    // reset to inherit in case the parent gets inheritable ACEs added later.
+    return false;
+  }
+
   ACL* parentDacl = nullptr;
   AutoFreeSecurityDescriptor parentSecDesc;
   nsAutoString parentPath;
@@ -260,14 +275,7 @@ bool nsLocalFile::ChildAclMatchesAclInheritedFromParent(
     return false;
   }
 
-  auto getInheritedAceCount = [](const ACL* aAcl) {
-    AclAceRange aclAceRange(WrapNotNull(aAcl));
-    return std::count_if(
-        aclAceRange.begin(), aclAceRange.end(),
-        [](const auto& hdr) { return hdr.AceFlags & INHERITED_ACE; });
-  };
-
-  return getInheritedAceCount(aChildDacl) == getInheritedAceCount(newDacl);
+  return childInheritedCount == getInheritedAceCount(newDacl);
 }
 
 class nsDriveEnumerator : public nsSimpleEnumerator,
@@ -1941,13 +1949,11 @@ nsresult nsLocalFile::MoveOrCopyAsSingleFileOrDir(nsIFile* aDestParent,
       if (isDir.isNothing() ||
           !ChildAclMatchesAclInheritedFromParent(WrapNotNull(childDacl), *isDir,
                                                  childSecDesc, aDestParent)) {
-        // We don't expect this to fail, but it shouldn't crash in release.
-        MOZ_ALWAYS_TRUE(
-            ERROR_SUCCESS ==
-            ::SetNamedSecurityInfoW(destPath.get(), SE_FILE_OBJECT,
-                                    DACL_SECURITY_INFORMATION |
-                                        UNPROTECTED_DACL_SECURITY_INFORMATION,
-                                    nullptr, nullptr, childDacl, nullptr));
+        // This may fail if the destination file is not available.
+        ::SetNamedSecurityInfoW(
+            destPath.get(), SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION,
+            nullptr, nullptr, childDacl, nullptr);
       }
     }
   }

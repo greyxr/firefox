@@ -469,6 +469,7 @@ class _QuickSuggestTestUtils {
     isSuggestedIndexRelativeToGroup = true,
     isBestMatch = false,
     requestId = undefined,
+    dismissalKey = undefined,
     descriptionL10n = { id: "urlbar-result-action-sponsored" },
     categories = [],
   } = {}) {
@@ -480,15 +481,13 @@ class _QuickSuggestTestUtils {
       source: lazy.UrlbarUtils.RESULT_SOURCE.SEARCH,
       heuristic: false,
       payload: {
-        title,
+        title: fullKeyword ? `${fullKeyword} — ${title}` : title,
         url,
         originalUrl,
         requestId,
         source,
         provider,
-        displayUrl: url.replace(/^https:\/\//, ""),
         isSponsored: true,
-        qsSuggestion: fullKeyword ?? keyword,
         sponsoredImpressionUrl: impressionUrl,
         sponsoredClickUrl: clickUrl,
         sponsoredBlockId: blockId,
@@ -525,6 +524,9 @@ class _QuickSuggestTestUtils {
       });
     } else {
       result.payload.icon = icon;
+      if (typeof dismissalKey == "string") {
+        result.payload.dismissalKey = dismissalKey;
+      }
     }
 
     return result;
@@ -584,16 +586,14 @@ class _QuickSuggestTestUtils {
       source: lazy.UrlbarUtils.RESULT_SOURCE.SEARCH,
       heuristic: false,
       payload: {
-        title,
+        title: fullKeyword ? `${fullKeyword} — ${title}` : title,
         url,
         icon,
         iconBlob,
         source,
         provider,
         telemetryType,
-        displayUrl: url.replace(/^https:\/\//, ""),
         isSponsored: false,
-        qsSuggestion: fullKeyword ?? keyword,
         isBlockable: true,
         isManageable: true,
       },
@@ -937,10 +937,11 @@ class _QuickSuggestTestUtils {
         url,
         originalUrl,
         icon,
-        displayUrl: url.replace(/^https:\/\//, ""),
         isSponsored: false,
         shouldShowUrl: true,
-        bottomTextL10n: { id: "firefox-suggest-addons-recommended" },
+        bottomTextL10n: {
+          id: "firefox-suggest-addons-recommended",
+        },
         helpUrl: lazy.QuickSuggest.HELP_URL,
         telemetryType: "amo",
       },
@@ -990,12 +991,13 @@ class _QuickSuggestTestUtils {
         title,
         url: finalUrl.href,
         originalUrl: url,
-        displayUrl: finalUrl.href.replace(/^https:\/\//, ""),
         isSponsored: false,
         description,
         icon: "chrome://global/skin/icons/mdn.svg",
         shouldShowUrl: true,
-        bottomTextL10n: { id: "firefox-suggest-mdn-bottom-text" },
+        bottomTextL10n: {
+          id: "firefox-suggest-mdn-bottom-text",
+        },
         source: "rust",
         provider: "Mdn",
         suggestionObject: new lazy.Suggestion.Mdn({
@@ -1022,9 +1024,10 @@ class _QuickSuggestTestUtils {
     source = "rust",
     provider = "Yelp",
     isTopPick = false,
-    // The default Yelp suggestedIndex is 0, unlike most other Suggest
-    // suggestion types, which use -1. Note that many callers still use
-    // -1 here because they test without the search suggestion provider.
+    // The logic for the default Yelp `suggestedIndex` is complex and depends on
+    // whether `UrlbarProviderSearchSuggestions` is active and whether search
+    // suggestions are shown first. By default -- when the answer to both of
+    // those questions is Yes -- Yelp's `suggestedIndex` is 0.
     suggestedIndex = 0,
     isSuggestedIndexRelativeToGroup = true,
     originalUrl = undefined,
@@ -1055,7 +1058,9 @@ class _QuickSuggestTestUtils {
         source,
         provider,
         telemetryType: "yelp",
-        bottomTextL10n: { id: "firefox-suggest-yelp-bottom-text" },
+        bottomTextL10n: {
+          id: "firefox-suggest-yelp-bottom-text",
+        },
         url,
         originalUrl,
         title,
@@ -1125,8 +1130,6 @@ class _QuickSuggestTestUtils {
         unit: temperatureUnit.toUpperCase(),
       },
       parseMarkup: true,
-      cacheable: true,
-      excludeArgsFromCacheKey: true,
     };
 
     return {
@@ -1142,7 +1145,6 @@ class _QuickSuggestTestUtils {
         bottomTextL10n: {
           id: "urlbar-result-weather-provider-sponsored",
           args: { provider: "AccuWeather®" },
-          cacheable: true,
         },
         source,
         provider,
@@ -1596,7 +1598,7 @@ class _QuickSuggestTestUtils {
             lazy.SearchUtils.TOPIC_SEARCH_SERVICE,
             (subject, data) => {
               this.#log(
-                "setLocales",
+                "#waitForAllLocaleChanges",
                 "Observed TOPIC_SEARCH_SERVICE with data: " + data
               );
               return data == "engines-reloaded";
@@ -1605,7 +1607,7 @@ class _QuickSuggestTestUtils {
           new Promise(resolve => {
             lazy.setTimeout(() => {
               this.#log(
-                "setLocales",
+                "#waitForAllLocaleChanges",
                 "Timed out waiting for TOPIC_SEARCH_SERVICE (not an error)"
               );
               resolve();

@@ -268,6 +268,11 @@ JS_PUBLIC_API JSObject* JS::CompileJsonModule(
     return nullptr;
   }
 
+  return CreateDefaultExportSyntheticModule(cx, jsonValue);
+}
+
+JS_PUBLIC_API JSObject* JS::CreateDefaultExportSyntheticModule(
+    JSContext* cx, const Value& defaultExport) {
   Rooted<ExportNameVector> exportNames(cx);
   if (!exportNames.append(cx->names().default_)) {
     ReportOutOfMemory(cx);
@@ -281,7 +286,7 @@ JS_PUBLIC_API JSObject* JS::CompileJsonModule(
   }
 
   RootedVector<Value> exportValues(cx);
-  if (!exportValues.append(jsonValue)) {
+  if (!exportValues.append(defaultExport)) {
     ReportOutOfMemory(cx);
     return nullptr;
   }
@@ -294,33 +299,29 @@ JS_PUBLIC_API JSObject* JS::CompileJsonModule(
   return moduleObject;
 }
 
-JS_PUBLIC_API JSObject* JS::CreateCssModule(
+JS_PUBLIC_API JSObject* JS::CompileWasmModule(
     JSContext* cx, const ReadOnlyCompileOptions& options,
-    const Value& cssValue) {
-  Rooted<ExportNameVector> exportNames(cx);
-  if (!exportNames.append(cx->names().default_)) {
-    ReportOutOfMemory(cx);
-    return nullptr;
-  }
+    SourceText<mozilla::Utf8Unit>& srcBuf) {
+  // TODO: Compilation of wasm modules will be added in
+  // https://bugzilla.mozilla.org/show_bug.cgi?id=1997621.
+  // For now, we fail unconditionally.
+  JS_ReportErrorNumberUTF8(cx, GetErrorMessage, nullptr,
+                           JSMSG_WASM_COMPILE_ERROR,
+                           "Compilation of wasm modules not implemented.");
 
-  Rooted<ModuleObject*> moduleObject(
-      cx, ModuleObject::createSynthetic(cx, &exportNames));
-  if (!moduleObject) {
-    return nullptr;
-  }
+  return nullptr;
+}
 
-  RootedVector<Value> exportValues(cx);
-  if (!exportValues.append(cssValue)) {
-    ReportOutOfMemory(cx);
-    return nullptr;
-  }
-
-  if (!ModuleObject::createSyntheticEnvironment(cx, moduleObject,
-                                                exportValues)) {
-    return nullptr;
-  }
-
-  return moduleObject;
+JS_PUBLIC_API JSObject* JS::CompileWasmModule(
+    JSContext* cx, const ReadOnlyCompileOptions& options,
+    SourceText<char16_t>& srcBuf) {
+  // TODO: Compilation of wasm modules will be added in
+  // https://bugzilla.mozilla.org/show_bug.cgi?id=1997621.
+  // For now, we fail unconditionally.
+  JS_ReportErrorNumberUTF8(cx, GetErrorMessage, nullptr,
+                           JSMSG_WASM_COMPILE_ERROR,
+                           "Compilation of wasm modules not implemented.");
+  return nullptr;
 }
 
 JS_PUBLIC_API void JS::SetModulePrivate(JSObject* module, const Value& value) {

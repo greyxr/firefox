@@ -4043,8 +4043,7 @@ AttachDecision HasPropIRGenerator::tryAttachSmallObjectVariableKey(
       return AttachDecision::NoAction;
     }
 
-    RootedValue key(cx_, StringValue(iter->key().toAtom()));
-    if (!keyListObj->append(cx_, key)) {
+    if (!keyListObj->append(cx_, StringValue(iter->key().toAtom()))) {
       cx_->recoverFromOutOfMemory();
       return AttachDecision::NoAction;
     }
@@ -5479,12 +5478,13 @@ bool SetPropIRGenerator::canAttachAddSlotStub(HandleObject obj, HandleId id) {
       return false;
     }
   } else {
-    // Normal Case: If property exists this isn't an "add"
+    // Normal Case: If property exists or is an OOB typed array index, this
+    // isn't an "add".
     PropertyResult prop;
     if (!LookupOwnPropertyPure(cx_, nobj, id, &prop)) {
       return false;
     }
-    if (prop.isFound()) {
+    if (prop.isFound() || prop.isTypedArrayOutOfRange()) {
       return false;
     }
   }
@@ -5588,6 +5588,10 @@ AttachDecision SetPropIRGenerator::tryAttachAddSlotStub(
   }
 
   JSObject* obj = &lhsVal_.toObject();
+  if (!obj->is<NativeObject>()) {
+    return AttachDecision::NoAction;
+  }
+  NativeObject* nobj = &obj->as<NativeObject>();
 
   PropertyResult prop;
   if (!LookupOwnPropertyPure(cx_, obj, id, &prop)) {
@@ -5597,11 +5601,7 @@ AttachDecision SetPropIRGenerator::tryAttachAddSlotStub(
     return AttachDecision::NoAction;
   }
 
-  if (!obj->is<NativeObject>()) {
-    return AttachDecision::NoAction;
-  }
-  auto* nobj = &obj->as<NativeObject>();
-
+  MOZ_RELEASE_ASSERT(prop.isNativeProperty());
   PropertyInfo propInfo = prop.propertyInfo();
   NativeObject* holder = nobj;
 
@@ -5613,6 +5613,7 @@ AttachDecision SetPropIRGenerator::tryAttachAddSlotStub(
 
   // The property must be the last added property of the object.
   SharedShape* newShape = holder->sharedShape();
+  MOZ_RELEASE_ASSERT(oldShape != newShape);
   MOZ_RELEASE_ASSERT(newShape->lastProperty() == propInfo);
 
 #ifdef DEBUG
@@ -7554,30 +7555,6 @@ AttachDecision InlinableNativeIRGenerator::tryAttachCanOptimizeArraySpecies() {
     writer.loadBooleanResult(false);
     writer.returnFromIC();
     trackAttached("CanOptimizeArraySpecies.Deoptimized");
-  }
-
-  return AttachDecision::Attach;
-}
-
-AttachDecision
-InlinableNativeIRGenerator::tryAttachCanOptimizeStringProtoSymbolLookup() {
-  // Self-hosted code calls this with no arguments.
-  MOZ_ASSERT(args_.length() == 0);
-
-  // Initialize the input operand.
-  initializeInputOperand();
-
-  // Note: we don't need to call emitNativeCalleeGuard for intrinsics.
-
-  if (cx_->realm()->realmFuses.optimizeStringPrototypeSymbolsFuse.intact()) {
-    writer.guardFuse(RealmFuses::FuseIndex::OptimizeStringPrototypeSymbolsFuse);
-    writer.loadBooleanResult(true);
-    writer.returnFromIC();
-    trackAttached("CanOptimizeStringProtoSymbolLookup.Optimized");
-  } else {
-    writer.loadBooleanResult(false);
-    writer.returnFromIC();
-    trackAttached("CanOptimizeStringProtoSymbolLookup.Deoptimized");
   }
 
   return AttachDecision::Attach;
@@ -10443,6 +10420,13 @@ AttachDecision InlinableNativeIRGenerator::tryAttachObjectKeys() {
     return AttachDecision::NoAction;
   }
 
+  Shape* expectedObjKeysShape =
+      GlobalObject::getArrayShapeWithDefaultProto(cx_);
+  if (!expectedObjKeysShape) {
+    cx_->recoverFromOutOfMemory();
+    return AttachDecision::NoAction;
+  }
+
   // Generate cache IR code to attach a new inline cache which will delegate the
   // call to Object.keys to the native function.
   Int32OperandId argcId = initializeInputOperand();
@@ -10463,7 +10447,7 @@ AttachDecision InlinableNativeIRGenerator::tryAttachObjectKeys() {
   writer.guardIsNotProxy(argObjId);
 
   // Compute the keys array.
-  writer.objectKeysResult(argObjId);
+  writer.objectKeysResult(argObjId, expectedObjKeysShape);
 
   writer.returnFromIC();
 
@@ -13239,8 +13223,6 @@ AttachDecision InlinableNativeIRGenerator::tryAttachStub() {
       return tryAttachIsCrossRealmArrayConstructor();
     case InlinableNative::IntrinsicCanOptimizeArraySpecies:
       return tryAttachCanOptimizeArraySpecies();
-    case InlinableNative::IntrinsicCanOptimizeStringProtoSymbolLookup:
-      return tryAttachCanOptimizeStringProtoSymbolLookup();
     case InlinableNative::IntrinsicGuardToArrayIterator:
     case InlinableNative::IntrinsicGuardToMapIterator:
     case InlinableNative::IntrinsicGuardToSetIterator:

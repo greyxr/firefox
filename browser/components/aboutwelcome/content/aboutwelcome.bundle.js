@@ -129,49 +129,6 @@ const AboutWelcomeUtils = {
       true
     );
   },
-
-  /**
-   * Normalize content.tiles into a single shape:
-   * tiles: { tile_items: Array<Tile> | Tile, container?: { style?: Object, header?: Object } }
-   *
-   * Supports legacy tiles array and single tile object and consumes
-   * legacy container `content.contentTilesContainer.style` and
-   * legacy header `content.tiles_header` properties.
-   */
-  normalizeContentTiles(content) {
-    const { tiles } = content;
-    const legacyContainer = content?.contentTilesContainer;
-    const legacyHeader = content?.tiles_header;
-
-    // Prefer tiles.container styles, fallback to legacy style, default {}
-    const style = tiles?.container?.style ?? legacyContainer?.style ?? {};
-
-    // Prefer tiles.container.header, fall back to legacy header
-    const header = tiles?.container?.header ?? legacyHeader;
-
-    let items;
-    // New shape
-    if (tiles?.tile_items !== undefined) {
-      items = Array.isArray(tiles.tile_items)
-        ? tiles.tile_items
-        : [tiles.tile_items];
-    }
-    // Legacy tiles array
-    else if (Array.isArray(tiles)) {
-      items = tiles;
-    }
-    // Legacy tiles object
-    else if (tiles && typeof tiles === "object" && tiles.type) {
-      items = [tiles];
-    } else {
-      items = [];
-    }
-
-    // Omit header when absent
-    const container = header ? { style, header } : { style };
-
-    return { tile_items: items, container };
-  },
 };
 
 
@@ -1661,7 +1618,7 @@ class ProtonScreen extends (react__WEBPACK_IMPORTED_MODULE_0___default().PureCom
     }) : null) : null, content.video_container ? /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement(_OnboardingVideo__WEBPACK_IMPORTED_MODULE_7__.OnboardingVideo, {
       content: content.video_container,
       handleAction: this.props.handleAction
-    }) : null, this.renderLanguageSwitcher(), content.above_button_content ? this.renderOrderedContent(content.above_button_content) : null, this.renderActionButtons("after_supporting_content", content), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement(_ContentTiles__WEBPACK_IMPORTED_MODULE_10__.ContentTiles, this.props), !hideStepsIndicator && aboveButtonStepsIndicator ? this.renderStepsIndicator() : null, this.renderActionButtons("end", content),
+    }) : null, this.renderLanguageSwitcher(), content?.tiles_container?.position !== "after_supporting_content" ? /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement(_ContentTiles__WEBPACK_IMPORTED_MODULE_10__.ContentTiles, this.props) : null, content.above_button_content ? this.renderOrderedContent(content.above_button_content) : null, this.renderActionButtons("after_supporting_content", content), content?.tiles_container?.position === "after_supporting_content" ? /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement(_ContentTiles__WEBPACK_IMPORTED_MODULE_10__.ContentTiles, this.props) : null, !hideStepsIndicator && aboveButtonStepsIndicator ? this.renderStepsIndicator() : null, this.renderActionButtons("end", content),
     /* Fullscreen dot-style step indicator should sit inside the
     main inner content to share its padding, which will be
     configurable with Bug 1956042 */
@@ -1973,11 +1930,11 @@ const CTAParagraph = props => {
     "data-l10n-id": content.text.string_id,
     onClick: onClick,
     onKeyUp: event => ["Enter", " "].includes(event.key) ? onClick(event) : null,
-    value: "cta_paragraph",
-    role: "link"
+    value: "cta_paragraph"
   }, " ", /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement("a", {
     "data-l10n-name": content.text.string_name,
-    tabIndex: "0"
+    tabIndex: "0",
+    role: "link"
   })) : null));
 };
 
@@ -2386,19 +2343,12 @@ const ContentTiles = props => {
   if (!tiles) {
     return null;
   }
-  const {
-    tile_items,
-    container
-  } = _lib_aboutwelcome_utils_mjs__WEBPACK_IMPORTED_MODULE_11__.AboutWelcomeUtils.normalizeContentTiles(content);
-  if (!tile_items.length) {
-    return null;
-  }
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   (0,react__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
     // Run once when ContentTiles mounts to prefill activeMultiSelect
     if (!props.activeMultiSelect) {
-      const tilesArray = Array.isArray(tile_items) ? tile_items : [tile_items];
+      const tilesArray = Array.isArray(tiles) ? tiles : [tiles];
       tilesArray.forEach((tile, index) => {
         if (tile.type !== "multiselect" || !tile.data) {
           return;
@@ -2418,7 +2368,7 @@ const ContentTiles = props => {
         }
       });
     }
-  }, [tile_items]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tiles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   (0,react__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
     /**
@@ -2611,36 +2561,31 @@ const ContentTiles = props => {
     })) : null);
   };
   const renderContentTiles = () => {
-    const hasHeader = !!container?.header;
-    const hasContainerStyle = !!Object.keys(container?.style || {}).length;
-
-    // Legacy rule: tiles as a single object renders without a container.
-    // Arrays (even length 1) render inside a container.
-    // Normalize helper will detect original input shape (object vs array) before normalizing to preserve intent.
-    const isArrayInput = Array.isArray(content.tiles);
-    if (!isArrayInput && tile_items.length === 1 && !hasHeader && !hasContainerStyle) {
-      return renderContentTile(tile_items[0], 0);
+    if (Array.isArray(tiles)) {
+      const containerStyle = content?.tiles_container?.style;
+      return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", {
+        id: "content-tiles-container",
+        style: _lib_aboutwelcome_utils_mjs__WEBPACK_IMPORTED_MODULE_11__.AboutWelcomeUtils.getValidStyle(containerStyle, CONTAINER_STYLES)
+      }, tiles.map((tile, index) => renderContentTile(tile, index)));
     }
-    return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", {
-      id: "content-tiles-container",
-      style: _lib_aboutwelcome_utils_mjs__WEBPACK_IMPORTED_MODULE_11__.AboutWelcomeUtils.getValidStyle(container?.style, CONTAINER_STYLES)
-    }, tile_items.map((tile, index) => renderContentTile(tile, index)));
+    // If tiles is not an array render the tile alone without a container
+    return renderContentTile(tiles, 0);
   };
-  if (container?.header) {
+  if (content.tiles_header) {
     return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement((react__WEBPACK_IMPORTED_MODULE_0___default().Fragment), null, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement("button", {
       className: "content-tiles-header secondary",
       onClick: toggleTiles,
       "aria-expanded": tilesHeaderExpanded,
       "aria-controls": `content-tiles-container`
     }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement(_MSLocalized__WEBPACK_IMPORTED_MODULE_1__.Localized, {
-      text: container.header?.title
+      text: content.tiles_header.title
     }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement("span", {
       className: "header-title"
     })), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", {
       className: "arrow-icon"
     })), tilesHeaderExpanded && renderContentTiles());
   }
-  return renderContentTiles(tile_items);
+  return renderContentTiles(tiles);
 };
 
 /***/ }),
@@ -3487,7 +3432,7 @@ const EmbeddedFxBackupOptIn = ({
     const {
       current
     } = backupRef;
-    const handleBackupEvent = () => {
+    const handleEnableScheduledBackups = () => {
       handleAction({
         currentTarget: {
           value: "tile_button"
@@ -3496,6 +3441,17 @@ const EmbeddedFxBackupOptIn = ({
           navigate: true
         },
         source: "backup_enabled"
+      });
+    };
+    const handleAdvanceScreens = () => {
+      handleAction({
+        currentTarget: {
+          value: "tile_button"
+        },
+        action: {
+          navigate: true
+        },
+        source: "advance_screens"
       });
     };
     const handleStateUpdate = ({
@@ -3517,10 +3473,12 @@ const EmbeddedFxBackupOptIn = ({
       current.supportBaseLink = state.supportBaseLink;
     };
     current?.addEventListener("BackupUI:StateWasUpdated", handleStateUpdate);
-    current?.addEventListener("BackupUI:EnableScheduledBackups", handleBackupEvent);
+    current?.addEventListener("BackupUI:EnableScheduledBackups", handleEnableScheduledBackups);
+    current?.addEventListener("SpotlightOnboardingAdvanceScreens", handleAdvanceScreens);
     return () => {
-      current?.removeEventListener("BackupUI:EnableScheduledBackups", handleBackupEvent);
+      current?.removeEventListener("BackupUI:EnableScheduledBackups", handleEnableScheduledBackups);
       current?.removeEventListener("BackupUI:StateWasUpdated", handleStateUpdate);
+      current?.removeEventListener("SpotlightOnboardingAdvanceScreens", handleAdvanceScreens);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -3531,6 +3489,7 @@ const EmbeddedFxBackupOptIn = ({
     "hide-secondary-button": !isEncryptedBackup || hide_secondary_button ? "" : undefined,
     "hide-file-path-chooser": isEncryptedBackup && !hide_password_input ? "" : undefined,
     "embedded-fx-backup-opt-in": "",
+    "backup-is-encrypted": isEncryptedBackup ? "" : undefined,
     "file-path-label-l10n-id": file_path_label,
     "turn-on-backup-header-l10n-id": turn_on_backup_header,
     "create-password-label-l10n-id": create_password_label,

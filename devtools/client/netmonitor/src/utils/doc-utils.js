@@ -7,7 +7,9 @@
 const {
   SUPPORTED_HTTP_CODES,
 } = require("resource://devtools/client/netmonitor/src/constants.js");
-
+const { getMdnLinkParams } = ChromeUtils.importESModule(
+  "resource://devtools/shared/mdn.mjs"
+);
 /**
  * A mapping of header names to external documentation. Any header included
  * here will show a MDN link alongside it.
@@ -69,14 +71,20 @@ const SUPPORTED_HEADERS = [
   "Link",
   "Location",
   "Origin",
+  "Origin-Agent-Cluster",
+  "Permissions-Policy",
   "Pragma",
   "Priority",
   "Proxy-Authenticate",
+  "Proxy-Authorization",
   "Public-Key-Pins",
   "Public-Key-Pins-Report-Only",
   "Range",
   "Referer",
   "Referrer-Policy",
+  "Refresh",
+  "Report-To",
+  "Reporting-Endpoints",
   "Retry-After",
   "Save-Data",
   "Sec-Fetch-Dest",
@@ -84,6 +92,11 @@ const SUPPORTED_HEADERS = [
   "Sec-Fetch-Site",
   "Sec-Fetch-User",
   "Sec-GPC",
+  "Sec-WebSocket-Accept",
+  "Sec-WebSocket-Extensions",
+  "Sec-WebSocket-Key",
+  "Sec-WebSocket-Protocol",
+  "Sec-WebSocket-Version",
   "Server",
   "Server-Timing",
   "Set-Cookie",
@@ -95,6 +108,7 @@ const SUPPORTED_HEADERS = [
   "Tk",
   "Trailer",
   "Transfer-Encoding",
+  "Upgrade",
   "Upgrade-Insecure-Requests",
   "User-Agent",
   "Vary",
@@ -113,7 +127,7 @@ const SUPPORTED_HEADERS = [
 const MDN_URL = "https://developer.mozilla.org/docs/";
 const MDN_STATUS_CODES_LIST_URL = `${MDN_URL}Web/HTTP/Reference/Status`;
 const getGAParams = (panelId = "netmonitor") => {
-  return `?utm_source=mozilla&utm_medium=devtools-${panelId}&utm_campaign=default`;
+  return `?` + getMdnLinkParams(`devtools-${panelId}`);
 };
 
 // Base URL to DevTools user docs

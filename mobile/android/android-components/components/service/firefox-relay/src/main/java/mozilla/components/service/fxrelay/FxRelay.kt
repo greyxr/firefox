@@ -6,9 +6,9 @@ package mozilla.components.service.fxrelay
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import mozilla.appservices.relay.RelayAddress
 import mozilla.appservices.relay.RelayApiException
 import mozilla.appservices.relay.RelayClient
+import mozilla.appservices.relay.RelayProfile
 import mozilla.components.support.base.log.logger.Logger
 
 /**
@@ -35,6 +35,7 @@ class FxRelay(
         CREATE_ADDRESS,
         ACCEPT_TERMS,
         FETCH_ALL_ADDRESSES,
+        FETCH_PROFILE,
     }
 
     /**
@@ -100,7 +101,7 @@ class FxRelay(
         usedOn: String,
     ): RelayAddress? = withContext(Dispatchers.IO) {
         handleRelayExceptions(RelayOperation.CREATE_ADDRESS, { null }) {
-            client.createAddress(description, generatedFor, usedOn)
+            client.createAddress(description, generatedFor, usedOn).into()
         }
     }
 
@@ -109,9 +110,24 @@ class FxRelay(
      */
     suspend fun fetchAllAddresses(): List<RelayAddress> = withContext(Dispatchers.IO) {
         handleRelayExceptions(
-            RelayOperation.FETCH_ALL_ADDRESSES, { emptyList() },
+            RelayOperation.FETCH_ALL_ADDRESSES,
+            { emptyList() },
         ) {
-            client.fetchAddresses()
+            client.fetchAddresses().map { it.into() }
+        }
+    }
+
+    /**
+     * Retrieves the [RelayProfile] for the authenticated user.
+     *
+     * @return The user's [RelayProfile] or `null` if the operation failed.
+     */
+    suspend fun fetchProfile(): RelayProfile? = withContext(Dispatchers.IO) {
+        handleRelayExceptions(
+            RelayOperation.FETCH_PROFILE,
+            { null },
+        ) {
+            client.fetchProfile()
         }
     }
 }

@@ -285,6 +285,10 @@ urlbar-result-yelp-realtime-business-hours-closed =
 #   $review_count (integer) - The review count of this.
 urlbar-result-yelp-realtime-popularity = { $rating } ({ $review_count })
 
+# This a11y label is read by screen readers when an item in the row is selected.
+urlbar-result-aria-group-yelp-realtime =
+  .aria-label = { -yelp-brand-name } suggestions
+
 ## These strings are used for flight status suggestions in the urlbar.
 ## The flight status suggestions shows the flight time, origin and destination
 ## and the status like delayed, etc.
@@ -293,7 +297,7 @@ urlbar-result-yelp-realtime-popularity = { $rating } ({ $review_count })
 urlbar-result-menu-dont-show-flight-status =
   .label = Don’t show flight status suggestions
 
-# A message that replaces a result when the user dismisses Yelp realtime
+# A message that replaces a result when the user dismisses flight status
 # suggestions.
 urlbar-result-dismissal-acknowledgment-flight-status = Thanks for your feedback. You won’t see flight status suggestions anymore.
 
@@ -336,3 +340,43 @@ urlbar-result-flight-status-airport = { $city } ({ $code })
 #   $flightNumber (string) - The flight number.
 #   $airlineName (string) - The airline name.
 urlbar-result-flight-status-flight-number-with-airline = { $flightNumber }, { $airlineName }
+
+# This a11y label is read by screen readers when an item in the row is selected.
+urlbar-result-aria-group-flight-status =
+  .aria-label = Flight status suggestions
+
+## These strings are used for sports suggestions in the urlbar. Sports
+## suggestions show team names, scores, game times, etc.
+
+# This string is shown for a scheduled future game. In English, "Team 1 at Team
+# 2" means the game is taking place at Team 2's home venue, and we say Team 1 is
+# the "away" team and Team 2 is the "home" team. If your language doesn't have a
+# similar phrase, use your equivalent of "vs." or even just "and".
+# Variables:
+#   $awayTeam (string) - Name of the visting team.
+#   $homeTeam (string) - Name of the home team.
+urlbar-result-sports-team-names = { $awayTeam } at { $homeTeam }
+
+# This string is shown when the game is today, in the near future, or in the
+# recent past.
+# Variables:
+#   $date (string) - Localized date string, e.g., "Today", "Oct 31"
+#   $time (string) - Localized time
+urlbar-result-sports-game-date-with-time = { $date } at { $time }
+
+# This status is shown when the game is in progress.
+urlbar-result-sports-status-live = Live
+
+# This status is shown when the game is over.
+urlbar-result-sports-status-final = Final
+
+# This string is shown in the result menu.
+urlbar-result-menu-dont-show-sports =
+  .label = Don’t show sports suggestions
+
+# A message that replaces a result when the user dismisses sports suggestions.
+urlbar-result-dismissal-acknowledgment-sports = Thanks for your feedback. You won’t see sports suggestions anymore.
+
+# This a11y label is read by screen readers when an item in the row is selected.
+urlbar-result-aria-group-sports =
+  .aria-label = Sports suggestions

@@ -71,8 +71,8 @@ internal class LinkingMiddleware(
         }
 
         engineObserver?.let {
-            context.dispatch(EngineAction.UpdateEngineSessionObserverAction(it.first, it.second))
-            context.dispatch(EngineAction.UpdateEngineSessionInitializingAction(it.first, false))
+            context.store.dispatch(EngineAction.UpdateEngineSessionObserverAction(it.first, it.second))
+            context.store.dispatch(EngineAction.UpdateEngineSessionInitializingAction(it.first, false))
         }
     }
 
@@ -83,7 +83,7 @@ internal class LinkingMiddleware(
         skipLoading: Boolean = true,
         includeParent: Boolean,
     ): Pair<String, EngineObserver> {
-        val observer = EngineObserver(tab.id, context.store)
+        val observer = EngineObserver(tab.id, context.store, scope)
         engineSession.register(observer)
 
         if (skipLoading) {

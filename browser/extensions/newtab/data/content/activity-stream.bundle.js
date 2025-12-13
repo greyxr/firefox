@@ -201,8 +201,6 @@ for (const type of [
   "PLACES_LINKS_DELETED",
   "PLACES_LINK_BLOCKED",
   "POCKET_CTA",
-  "POCKET_THUMBS_DOWN",
-  "POCKET_THUMBS_UP",
   "POCKET_WAITING_FOR_SPOC",
   "PREFS_INITIAL_VALUES",
   "PREF_CHANGED",
@@ -267,10 +265,6 @@ for (const type of [
   "TOP_SITES_UPDATED",
   "TOTAL_BOOKMARKS_REQUEST",
   "TOTAL_BOOKMARKS_RESPONSE",
-  "TRENDING_SEARCH_IMPRESSION",
-  "TRENDING_SEARCH_SUGGESTION_OPEN",
-  "TRENDING_SEARCH_TOGGLE_COLLAPSE",
-  "TRENDING_SEARCH_UPDATE",
   "UNBLOCK_SECTION",
   "UNFOLLOW_SECTION",
   "UNINIT",
@@ -725,6 +719,7 @@ class DiscoveryStreamAdminUI extends (external_React_default()).PureComponent {
     this.refreshTopicSelectionCache = this.refreshTopicSelectionCache.bind(this);
     this.handleSectionsToggle = this.handleSectionsToggle.bind(this);
     this.toggleIABBanners = this.toggleIABBanners.bind(this);
+    this.sendConversionEvent = this.sendConversionEvent.bind(this);
     this.state = {
       toggledStories: {},
       weatherQuery: ""
@@ -887,7 +882,19 @@ class DiscoveryStreamAdminUI extends (external_React_default()).PureComponent {
     } = e.target;
     this.props.dispatch(actionCreators.SetPref(PREF_SECTIONS_ENABLED, pressed));
     this.props.dispatch(actionCreators.SetPref("discoverystream.sections.cards.enabled", pressed));
-    this.props.dispatch(actionCreators.SetPref("discoverystream.sections.cards.thumbsUpDown.enabled", pressed));
+  }
+  sendConversionEvent() {
+    const detail = {
+      partnerId: "demo-partner",
+      lookbackDays: 7,
+      impressionType: "default"
+    };
+    const event = new CustomEvent("FirefoxConversionNotification", {
+      detail,
+      bubbles: true,
+      composed: true
+    });
+    window?.dispatchEvent(event);
   }
   renderComponent(width, component) {
     return /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
@@ -1113,7 +1120,10 @@ class DiscoveryStreamAdminUI extends (external_React_default()).PureComponent {
       pressed: mediumRectangleEnabledPressed || null,
       onToggle: this.toggleIABBanners,
       label: "Enable IAB Medium Rectangle (MREC)"
-    }))), /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, prefToggles.map(pref => /*#__PURE__*/external_React_default().createElement(Row, {
+    }))), /*#__PURE__*/external_React_default().createElement("button", {
+      className: "button",
+      onClick: this.sendConversionEvent
+    }, "Send conversion event"), /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, prefToggles.map(pref => /*#__PURE__*/external_React_default().createElement(Row, {
       key: pref
     }, /*#__PURE__*/external_React_default().createElement("td", null, /*#__PURE__*/external_React_default().createElement(TogglePrefCheckbox, {
       checked: config[pref],
@@ -2213,35 +2223,6 @@ const LinkMenuOptions = {
       }),
     };
   },
-  TrendingSearchLearnMore: site => ({
-    id: "newtab-trending-searches-learn-more",
-    action: actionCreators.OnlyToMain({
-      type: actionTypes.OPEN_LINK,
-      data: { url: site.url },
-    }),
-    impression: actionCreators.OnlyToMain({
-      type: actionTypes.TRENDING_SEARCH_LEARN_MORE,
-      data: {
-        variant: site.variant,
-      },
-    }),
-  }),
-  TrendingSearchDismiss: site => ({
-    id: "newtab-trending-searches-dismiss",
-    action: actionCreators.OnlyToMain({
-      type: actionTypes.SET_PREF,
-      data: {
-        name: "trendingSearch.enabled",
-        value: false,
-      },
-    }),
-    impression: actionCreators.OnlyToMain({
-      type: actionTypes.TRENDING_SEARCH_DISMISS,
-      data: {
-        variant: site.variant,
-      },
-    }),
-  }),
 };
 
 ;// CONCATENATED MODULE: ./content-src/components/LinkMenu/LinkMenu.jsx
@@ -2443,7 +2424,8 @@ class ContextMenuButton extends (external_React_default()).PureComponent {
       contextMenuKeyboard
     } = this.state;
     return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("button", {
-      "aria-haspopup": "true",
+      "aria-haspopup": "menu",
+      "aria-expanded": showContextMenu,
       "data-l10n-id": tooltip,
       "data-l10n-args": tooltipArgs ? JSON.stringify(tooltipArgs) : null,
       className: "context-menu-button icon",
@@ -2553,16 +2535,14 @@ const PREF_SYSTEM_STORIES_ENABLED = "feeds.system.topstories";
  * A custom react hook that sets up an IntersectionObserver to observe a single
  * or list of elements and triggers a callback when the element comes into the viewport
  * Note: The refs used should be an array type
+ *
  * @function useIntersectionObserver
  * @param {function} callback - The function to call when an element comes into the viewport
- * @param {Object} options - Options object passed to Intersection Observer:
+ * @param {object} options - Options object passed to Intersection Observer:
  * https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver/IntersectionObserver#options
- * @param {Boolean} [isSingle = false] Boolean if the elements are an array or single element
+ * @param {boolean} [isSingle = false] Boolean if the elements are an array or single element
  *
  * @returns {React.MutableRefObject} a ref containing an array of elements or single element
- *
- *
- *
  */
 function useIntersectionObserver(callback, threshold = 0.3) {
   const elementsRef = (0,external_React_namespaceObject.useRef)([]);
@@ -2593,6 +2573,7 @@ function useIntersectionObserver(callback, threshold = 0.3) {
 
 /**
  * Determines which column layout is active based on the screen width
+ *
  * @param {number} screenWidth - The current window width (in pixels)
  * @returns {string} The active column layout (e.g. "col-3", "col-2", "col-1")
  */
@@ -3385,62 +3366,10 @@ const DSMessageFooter = props => {
     className: "story-footer"
   }, dsMessageLabel);
 };
-;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/DSThumbsUpDownButtons/DSThumbsUpDownButtons.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-function DSThumbsUpDownButtons({
-  sponsor,
-  onThumbsUpClick,
-  onThumbsDownClick,
-  isThumbsUpActive,
-  isThumbsDownActive,
-  refinedCardsLayout,
-  tabIndex
-}) {
-  let thumbsButtons = /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("button", {
-    onClick: onThumbsUpClick,
-    className: `card-stp-thumbs-button icon icon-thumbs-up ${isThumbsUpActive ? "is-active" : null}`,
-    "data-l10n-id": "newtab-pocket-thumbs-up-tooltip",
-    tabIndex: tabIndex
-  }), /*#__PURE__*/external_React_default().createElement("button", {
-    onClick: onThumbsDownClick,
-    className: `card-stp-thumbs-button icon icon-thumbs-down ${isThumbsDownActive ? "is-active" : null}`,
-    "data-l10n-id": "newtab-pocket-thumbs-down-tooltip",
-    tabIndex: tabIndex
-  }));
-  if (refinedCardsLayout) {
-    thumbsButtons = /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("moz-button", {
-      iconsrc: "chrome://global/skin/icons/thumbs-up-20.svg",
-      onClick: onThumbsUpClick,
-      className: `card-stp-thumbs-button icon icon-thumbs-up refined-layout ${isThumbsUpActive ? "is-active" : null}`,
-      "data-l10n-id": "newtab-pocket-thumbs-up-tooltip",
-      type: "icon ghost",
-      tabIndex: tabIndex
-    }), /*#__PURE__*/external_React_default().createElement("moz-button", {
-      iconsrc: "chrome://global/skin/icons/thumbs-down-20.svg",
-      onClick: onThumbsDownClick,
-      className: `card-stp-thumbs-button icon icon-thumbs-down ${isThumbsDownActive ? "is-active" : null}`,
-      "data-l10n-id": "newtab-pocket-thumbs-down-tooltip",
-      type: "icon ghost",
-      tabIndex: tabIndex
-    }));
-  }
-  return /*#__PURE__*/external_React_default().createElement("div", {
-    className: "card-stp-thumbs-buttons-wrapper"
-  }, !sponsor && /*#__PURE__*/external_React_default().createElement("div", {
-    className: "card-stp-thumbs-buttons"
-  }, thumbsButtons));
-}
-
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/DSCard/DSCard.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
 
 
 
@@ -3460,6 +3389,7 @@ const PREF_FAVICONS_ENABLED = "discoverystream.publisherFavicon.enabled";
 
 /**
  * READ TIME FROM WORD COUNT
+ *
  * @param {int} wordCount number of words in an article
  * @returns {int} number of words per minute in minutes
  */
@@ -3535,20 +3465,14 @@ const DefaultMeta = ({
   ctaButtonVariant,
   dispatch,
   mayHaveSectionsCards,
-  mayHaveThumbsUpDown,
-  onThumbsUpClick,
-  onThumbsDownClick,
-  state,
   format,
   topic,
   isSectionsCard,
   showTopics,
   icon_src,
-  refinedCardsLayout,
-  tabIndex
+  refinedCardsLayout
 }) => {
-  const shouldHaveThumbs = format !== "rectangle" && mayHaveSectionsCards && mayHaveThumbsUpDown;
-  const shouldHaveFooterSection = isSectionsCard && (shouldHaveThumbs || showTopics);
+  const shouldHaveFooterSection = isSectionsCard && showTopics;
   return /*#__PURE__*/external_React_default().createElement("div", {
     className: "meta"
   }, /*#__PURE__*/external_React_default().createElement("div", {
@@ -3567,14 +3491,7 @@ const DefaultMeta = ({
     className: "excerpt clamp"
   }, "Sponsored content supports our mission to build a better web.") : excerpt && /*#__PURE__*/external_React_default().createElement("p", {
     className: "excerpt clamp"
-  }, excerpt)), format !== "rectangle" && !mayHaveSectionsCards && mayHaveThumbsUpDown && !refinedCardsLayout && /*#__PURE__*/external_React_default().createElement(DSThumbsUpDownButtons, {
-    onThumbsDownClick: onThumbsDownClick,
-    onThumbsUpClick: onThumbsUpClick,
-    sponsor: sponsor,
-    isThumbsDownActive: state.isThumbsDownActive,
-    isThumbsUpActive: state.isThumbsUpActive,
-    tabIndex: tabIndex
-  }), (shouldHaveFooterSection || refinedCardsLayout) && /*#__PURE__*/external_React_default().createElement("div", {
+  }, excerpt)), (shouldHaveFooterSection || refinedCardsLayout) && /*#__PURE__*/external_React_default().createElement("div", {
     className: "sections-card-footer"
   }, refinedCardsLayout && format !== "rectangle" && format !== "spoc" && /*#__PURE__*/external_React_default().createElement(DSSource, {
     source: source,
@@ -3585,14 +3502,6 @@ const DefaultMeta = ({
     sponsored_by_override: sponsored_by_override,
     icon_src: icon_src,
     refinedCardsLayout: refinedCardsLayout
-  }), (shouldHaveThumbs || refinedCardsLayout) && /*#__PURE__*/external_React_default().createElement(DSThumbsUpDownButtons, {
-    onThumbsDownClick: onThumbsDownClick,
-    onThumbsUpClick: onThumbsUpClick,
-    sponsor: sponsor,
-    isThumbsDownActive: state.isThumbsDownActive,
-    isThumbsUpActive: state.isThumbsUpActive,
-    refinedCardsLayout: refinedCardsLayout,
-    tabIndex: tabIndex
   }), showTopics && /*#__PURE__*/external_React_default().createElement("span", {
     className: "ds-card-topic",
     "data-l10n-id": `newtab-topic-label-${topic}`
@@ -3617,8 +3526,6 @@ class _DSCard extends (external_React_default()).PureComponent {
     this.doesLinkTopicMatchSelectedTopic = this.doesLinkTopicMatchSelectedTopic.bind(this);
     this.onMenuUpdate = this.onMenuUpdate.bind(this);
     this.onMenuShow = this.onMenuShow.bind(this);
-    this.onThumbsUpClick = this.onThumbsUpClick.bind(this);
-    this.onThumbsDownClick = this.onThumbsDownClick.bind(this);
     const refinedCardsLayout = this.props.Prefs.values["discoverystream.refinedCardsLayout.enabled"];
     this.setContextMenuButtonHostRef = element => {
       this.contextMenuButtonHostElement = element;
@@ -3627,9 +3534,7 @@ class _DSCard extends (external_React_default()).PureComponent {
       this.placeholderElement = element;
     };
     this.state = {
-      isSeen: false,
-      isThumbsUpActive: false,
-      isThumbsDownActive: false
+      isSeen: false
     };
 
     // If this is for the about:home startup cache, then we always want
@@ -3769,134 +3674,6 @@ class _DSCard extends (external_React_default()).PureComponent {
           } : {})
         }]
       }));
-    }
-  }
-  onThumbsUpClick(event) {
-    event.stopPropagation();
-    event.preventDefault();
-
-    // Toggle active state for thumbs up button to show CSS animation
-    const currentState = this.state.isThumbsUpActive;
-
-    // If thumbs up has been clicked already, do nothing.
-    if (currentState) {
-      return;
-    }
-    this.setState({
-      isThumbsUpActive: !currentState
-    });
-
-    // Record thumbs up telemetry event
-    this.props.dispatch(actionCreators.DiscoveryStreamUserEvent({
-      event: "POCKET_THUMBS_UP",
-      source: "THUMBS_UI",
-      value: {
-        action_position: this.props.pos,
-        recommendation_id: this.props.recommendation_id,
-        tile_id: this.props.id,
-        corpus_item_id: this.props.corpus_item_id,
-        scheduled_corpus_item_id: this.props.scheduled_corpus_item_id,
-        recommended_at: this.props.recommended_at,
-        received_rank: this.props.received_rank,
-        thumbs_up: true,
-        thumbs_down: false,
-        topic: this.props.topic,
-        format: getActiveCardSize(window.innerWidth, this.props.sectionsClassNames, this.props.section, false // (thumbs up/down only exist on organic content)
-        ),
-        ...(this.props.section ? {
-          section: this.props.section,
-          section_position: this.props.sectionPosition,
-          is_section_followed: this.props.sectionFollowed
-        } : {})
-      }
-    }));
-
-    // Show Toast
-    this.props.dispatch(actionCreators.OnlyToOneContent({
-      type: actionTypes.SHOW_TOAST_MESSAGE,
-      data: {
-        showNotifications: true,
-        toastId: "thumbsUpToast"
-      }
-    }, "ActivityStream:Content"));
-  }
-  onThumbsDownClick(event) {
-    event.stopPropagation();
-    event.preventDefault();
-
-    // Toggle active state for thumbs down button to show CSS animation
-    const currentState = this.state.isThumbsDownActive;
-    this.setState({
-      isThumbsDownActive: !currentState
-    });
-
-    // Run dismiss event after 0.5 second delay
-    if (this.props.dispatch && this.props.type && this.props.id && this.props.url) {
-      const index = this.props.pos;
-      const source = this.props.type.toUpperCase();
-      const spocData = {
-        url: this.props.url,
-        guid: this.props.id,
-        type: "CardGrid",
-        card_type: "organic",
-        recommendation_id: this.props.recommendation_id,
-        tile_id: this.props.id,
-        corpus_item_id: this.props.corpus_item_id,
-        scheduled_corpus_item_id: this.props.scheduled_corpus_item_id,
-        recommended_at: this.props.recommended_at,
-        received_rank: this.props.received_rank
-      };
-      const blockUrlOption = LinkMenuOptions.BlockUrl(spocData, index, source);
-      const {
-        action,
-        impression,
-        userEvent
-      } = blockUrlOption;
-      setTimeout(() => {
-        this.props.dispatch(action);
-        this.props.dispatch(actionCreators.DiscoveryStreamUserEvent({
-          event: userEvent,
-          source,
-          action_position: index
-        }));
-      }, 500);
-      if (impression) {
-        this.props.dispatch(impression);
-      }
-
-      // Record thumbs down telemetry event
-      this.props.dispatch(actionCreators.DiscoveryStreamUserEvent({
-        event: "POCKET_THUMBS_DOWN",
-        source: "THUMBS_UI",
-        value: {
-          action_position: this.props.pos,
-          recommendation_id: this.props.recommendation_id,
-          tile_id: this.props.id,
-          corpus_item_id: this.props.corpus_item_id,
-          scheduled_corpus_item_id: this.props.scheduled_corpus_item_id,
-          recommended_at: this.props.recommended_at,
-          received_rank: this.props.received_rank,
-          thumbs_up: false,
-          thumbs_down: true,
-          topic: this.props.topic,
-          format: getActiveCardSize(window.innerWidth, this.props.sectionsClassNames, this.props.section, false // (thumbs up/down only exist on organic content)
-          ),
-          ...(this.props.section ? {
-            section: this.props.section,
-            section_position: this.props.sectionPosition,
-            is_section_followed: this.props.sectionFollowed
-          } : {})
-        }
-      }));
-
-      // Show Toast
-      this.props.dispatch(actionCreators.OnlyToOneContent({
-        type: actionTypes.SHOW_TOAST_MESSAGE,
-        data: {
-          showNotifications: true,
-          toastId: "thumbsDownToast"
-        }
-      }, "ActivityStream:Content"));
     }
   }
   onMenuUpdate(showContextMenu) {
@@ -4203,10 +3980,7 @@ class _DSCard extends (external_React_default()).PureComponent {
       sponsored_by_override: this.props.sponsored_by_override,
       ctaButtonVariant: ctaButtonVariant,
       dispatch: this.props.dispatch,
-      mayHaveThumbsUpDown: this.props.mayHaveThumbsUpDown,
       mayHaveSectionsCards: this.props.mayHaveSectionsCards,
-      onThumbsUpClick: this.onThumbsUpClick,
-      onThumbsDownClick: this.onThumbsDownClick,
       state: this.state,
       showTopics: !refinedCardsLayout && this.props.showTopics,
       isSectionsCard: this.props.mayHaveSectionsCards && this.props.topic,
@@ -4836,233 +4610,6 @@ const AdBanner = ({
     toggleActive: toggleActive
   }))), promoCardEnabled && /*#__PURE__*/external_React_default().createElement(PromoCard, null));
 };
-;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/TrendingSearches/TrendingSearches.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-
-
-
-
-const PREF_TRENDING_VARIANT = "trendingSearch.variant";
-const PREF_REFINED_CARDS_LAYOUT = "discoverystream.refinedCardsLayout.enabled";
-function TrendingSearches() {
-  const [showContextMenu, setShowContextMenu] = (0,external_React_namespaceObject.useState)(false);
-  // The keyboard access parameter is passed down to LinkMenu component
-  // that uses it to focus on the first context menu option for accessibility.
-  const [isKeyboardAccess, setIsKeyboardAccess] = (0,external_React_namespaceObject.useState)(false);
-  const dispatch = (0,external_ReactRedux_namespaceObject.useDispatch)();
-  const {
-    TrendingSearch,
-    Prefs
-  } = (0,external_ReactRedux_namespaceObject.useSelector)(state => state);
-  const {
-    values: prefs
-  } = Prefs;
-  const {
-    suggestions,
-    collapsed
-  } = TrendingSearch;
-  const variant = prefs[PREF_TRENDING_VARIANT];
-  const refinedCards = prefs[PREF_REFINED_CARDS_LAYOUT];
-  let resultRef = (0,external_React_namespaceObject.useRef)([]);
-  let contextMenuHost = (0,external_React_namespaceObject.useRef)(null);
-  const TRENDING_SEARCH_CONTEXT_MENU_OPTIONS = ["TrendingSearchDismiss", "TrendingSearchLearnMore"];
-  function onArrowClick() {
-    dispatch(actionCreators.AlsoToMain({
-      type: actionTypes.TRENDING_SEARCH_TOGGLE_COLLAPSE,
-      data: {
-        collapsed: !collapsed,
-        variant
-      }
-    }));
-  }
-  function handleLinkOpen() {
-    dispatch(actionCreators.AlsoToMain({
-      type: actionTypes.TRENDING_SEARCH_SUGGESTION_OPEN,
-      data: {
-        variant
-      }
-    }));
-  }
-
-  // If the window is small, the context menu in variant B will move closer to the card
-  // so that it doesn't cut off
-  const handleContextMenuShow = () => {
-    const host = contextMenuHost.current;
-    const isRTL = document.dir === "rtl"; // returns true if page language is right-to-left
-    const checkRect = host.getBoundingClientRect();
-    const maxBounds = 200;
-
-    // Adds the class of "last-item" if the card is near the edge of the window
-    const checkBounds = isRTL ? checkRect.left <= maxBounds : window.innerWidth - checkRect.right <= maxBounds;
-    if (checkBounds) {
-      host.classList.add("last-item");
-    }
-  };
-  const handleContextMenuUpdate = () => {
-    const host = contextMenuHost.current;
-    if (!host) {
-      return;
-    }
-    host.classList.remove("last-item");
-  };
-  const toggleContextMenu = isKeyBoard => {
-    setShowContextMenu(!showContextMenu);
-    setIsKeyboardAccess(isKeyBoard);
-    if (!showContextMenu) {
-      handleContextMenuShow();
-    } else {
-      handleContextMenuUpdate();
-    }
-  };
-  function onContextMenuClick(e) {
-    e.preventDefault();
-    toggleContextMenu(false);
-  }
-  function onContextMenuKeyDown(e) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggleContextMenu(true);
-    }
-  }
-  function onUpdate() {
-    setShowContextMenu(!showContextMenu);
-  }
-  function handleResultKeyDown(event, index) {
-    const maxResults = suggestions.length;
-    let nextIndex = index;
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      if (index < maxResults - 1) {
-        nextIndex = index + 1;
-      } else {
-        return;
-      }
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      if (index > 0) {
-        nextIndex = index - 1;
-      } else {
-        return;
-      }
-    }
-    resultRef.current[index].tabIndex = -1;
-    resultRef.current[nextIndex].tabIndex = 0;
-    resultRef.current[nextIndex].focus();
-  }
-  const handleIntersection = (0,external_React_namespaceObject.useCallback)(() => {
-    dispatch(actionCreators.AlsoToMain({
-      type: actionTypes.TRENDING_SEARCH_IMPRESSION,
-      data: {
-        variant
-      }
-    }));
-  }, [dispatch, variant]);
-  const ref = useIntersectionObserver(handleIntersection);
-  if (!suggestions?.length) {
-    return null;
-  } else if (variant === "a" || variant === "c") {
-    return /*#__PURE__*/external_React_default().createElement("section", {
-      ref: el => {
-        ref.current = [el];
-      }
-      // Variant C matches the design of variant A but should only
-      // appear on hover
-      ,
-      className: `trending-searches-pill-wrapper ${variant === "c" ? "hover-only" : ""}`
-    }, /*#__PURE__*/external_React_default().createElement("div", {
-      className: "trending-searches-title-wrapper"
-    }, /*#__PURE__*/external_React_default().createElement("span", {
-      className: "trending-searches-icon icon icon-arrow-trending"
-    }), /*#__PURE__*/external_React_default().createElement("h2", {
-      className: "trending-searches-title",
-      "data-l10n-id": "newtab-trending-searches-title"
-    }), /*#__PURE__*/external_React_default().createElement("div", {
-      className: "close-open-trending-searches"
-    }, /*#__PURE__*/external_React_default().createElement("moz-button", {
-      iconsrc: `chrome://global/skin/icons/arrow-${collapsed ? "down" : "up"}.svg`,
-      onClick: onArrowClick,
-      className: `icon icon-arrowhead-up`,
-      type: "icon ghost",
-      "data-l10n-id": `newtab-trending-searches-${collapsed ? "show" : "hide"}-trending`
-    }))), !collapsed && /*#__PURE__*/external_React_default().createElement("ul", {
-      className: "trending-searches-list"
-    }, suggestions.map((result, index) => {
-      return /*#__PURE__*/external_React_default().createElement("li", {
-        key: result.suggestion,
-        className: "trending-search-item",
-        onKeyDown: e => handleResultKeyDown(e, index)
-      }, /*#__PURE__*/external_React_default().createElement(SafeAnchor, {
-        url: result.searchUrl,
-        onLinkClick: handleLinkOpen,
-        title: result.suggestion,
-        setRef: item => resultRef.current[index] = item,
-        tabIndex: index === 0 ? 0 : -1
-      }, result.lowerCaseSuggestion));
-    })));
-  } else if (variant === "b") {
-    return /*#__PURE__*/external_React_default().createElement("div", {
-      ref: el => {
-        ref.current = [el];
-        contextMenuHost.current = el;
-      },
-      className: "trending-searches-list-view"
-    }, /*#__PURE__*/external_React_default().createElement("div", {
-      className: "trending-searches-list-view-header"
-    }, /*#__PURE__*/external_React_default().createElement("h3", {
-      "data-l10n-id": "newtab-trending-searches-title"
-    }), /*#__PURE__*/external_React_default().createElement("div", {
-      className: "trending-searches-context-menu-wrapper"
-    }, /*#__PURE__*/external_React_default().createElement("div", {
-      className: `trending-searches-context-menu ${showContextMenu ? "context-menu-open" : ""}`
-    }, /*#__PURE__*/external_React_default().createElement("moz-button", {
-      type: "icon ghost",
-      size: "default",
-      "data-l10n-id": "newtab-menu-section-tooltip",
-      iconsrc: "chrome://global/skin/icons/more.svg",
-      onClick: onContextMenuClick,
-      onKeyDown: onContextMenuKeyDown
-    }), showContextMenu && /*#__PURE__*/external_React_default().createElement(LinkMenu, {
-      onUpdate: onUpdate,
-      dispatch: dispatch,
-      keyboardAccess: isKeyboardAccess,
-      options: TRENDING_SEARCH_CONTEXT_MENU_OPTIONS,
-      shouldSendImpressionStats: true,
-      site: {
-        url: "https://support.mozilla.org/1/firefox/%VERSION%/%OS%/%LOCALE%/trending-searches-new-tab",
-        variant
-      }
-    })))), /*#__PURE__*/external_React_default().createElement("ul", {
-      className: "trending-searches-list-items"
-    }, suggestions.slice(0, 6).map((result, index) => {
-      return /*#__PURE__*/external_React_default().createElement("li", {
-        key: result.suggestion,
-        className: `trending-searches-list-item ${refinedCards ? "compact" : ""}`,
-        onKeyDown: e => handleResultKeyDown(e, index)
-      }, /*#__PURE__*/external_React_default().createElement(SafeAnchor, {
-        url: result.searchUrl,
-        onLinkClick: handleLinkOpen,
-        title: result.suggestion,
-        setRef: item => resultRef.current[index] = item,
-        tabIndex: index === 0 ? 0 : -1
-      }, result.icon ? /*#__PURE__*/external_React_default().createElement("div", {
-        className: "trending-icon-wrapper"
-      }, /*#__PURE__*/external_React_default().createElement("img", {
-        src: result.icon,
-        alt: "",
-        className: "trending-icon"
-      }), /*#__PURE__*/external_React_default().createElement("div", {
-        className: "trending-info-wrapper"
-      }, result.lowerCaseSuggestion, /*#__PURE__*/external_React_default().createElement("small", null, result.description))) : /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("span", {
-        className: "trending-searches-icon icon icon-arrow-trending"
-      }), result.lowerCaseSuggestion)));
-    })));
-  }
-}
-
 ;// CONCATENATED MODULE: ./content-src/components/DiscoveryStreamComponents/CardGrid/CardGrid.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -5075,9 +4622,7 @@ function TrendingSearches() {
 
 
 
-
 const PREF_SECTIONS_CARDS_ENABLED = "discoverystream.sections.cards.enabled";
-const PREF_THUMBS_UP_DOWN_ENABLED = "discoverystream.thumbsUpDown.enabled";
 const PREF_TOPICS_ENABLED = "discoverystream.topicLabels.enabled";
 const PREF_TOPICS_SELECTED = "discoverystream.topicSelection.selectedTopics";
 const PREF_TOPICS_AVAILABLE = "discoverystream.topicSelection.topics";
@@ -5086,10 +4631,6 @@ const PREF_BILLBOARD_ENABLED = "newtabAdSize.billboard";
 const PREF_BILLBOARD_POSITION = "newtabAdSize.billboard.position";
 const PREF_LEADERBOARD_ENABLED = "newtabAdSize.leaderboard";
 const PREF_LEADERBOARD_POSITION = "newtabAdSize.leaderboard.position";
-const PREF_TRENDING_SEARCH = "trendingSearch.enabled";
-const PREF_TRENDING_SEARCH_SYSTEM = "system.trendingSearch.enabled";
-const PREF_SEARCH_ENGINE = "trendingSearch.defaultSearchEngine";
-const PREF_TRENDING_SEARCH_VARIANT = "trendingSearch.variant";
 const WIDGET_IDS = {
   TOPICS: 1
 };
@@ -5187,15 +4728,12 @@ class _CardGrid extends (external_React_default()).PureComponent {
       topicsLoading
     } = DiscoveryStream;
     const mayHaveSectionsCards = prefs[PREF_SECTIONS_CARDS_ENABLED];
-    const mayHaveThumbsUpDown = prefs[PREF_THUMBS_UP_DOWN_ENABLED];
     const showTopics = prefs[PREF_TOPICS_ENABLED];
     const selectedTopics = prefs[PREF_TOPICS_SELECTED];
     const availableTopics = prefs[PREF_TOPICS_AVAILABLE];
     const spocsStartupCacheEnabled = prefs[PREF_SPOCS_STARTUPCACHE_ENABLED];
     const billboardEnabled = prefs[PREF_BILLBOARD_ENABLED];
     const leaderboardEnabled = prefs[PREF_LEADERBOARD_ENABLED];
-    const trendingEnabled = prefs[PREF_TRENDING_SEARCH] && prefs[PREF_TRENDING_SEARCH_SYSTEM] && prefs[PREF_SEARCH_ENGINE]?.toLowerCase() === "google";
-    const trendingVariant = prefs[PREF_TRENDING_SEARCH_VARIANT];
     const recs = this.props.data.recommendations.slice(0, items);
     const cards = [];
     let cardIndex = 0;
@@ -5243,7 +4781,6 @@ class _CardGrid extends (external_React_default()).PureComponent {
           ctaButtonVariant: ctaButtonVariant,
           recommendation_id: rec.recommendation_id,
           firstVisibleTimestamp: this.props.firstVisibleTimestamp,
-          mayHaveThumbsUpDown: mayHaveThumbsUpDown,
           mayHaveSectionsCards: mayHaveSectionsCards,
           corpus_item_id: rec.corpus_item_id,
           scheduled_corpus_item_id: rec.scheduled_corpus_item_id,
@@ -5285,14 +4822,6 @@ class _CardGrid extends (external_React_default()).PureComponent {
           cards.splice(position.index, 1, widgetComponent);
         }
       }
-    }
-    if (trendingEnabled && trendingVariant === "b") {
-      const firstSpocPosition = this.props.spocPositions[0]?.index;
-      // double check that a spoc/mrec is actually in the index it should be in
-      const format = cards[firstSpocPosition]?.props?.format;
-      const isSpoc = format === "spoc" || format === "rectangle";
-      // if the spoc is not in its position, place TrendingSearches in the 3rd position
-      cards.splice(isSpoc ? firstSpocPosition + 1 : 2, 1, /*#__PURE__*/external_React_default().createElement(TrendingSearches, null));
     }
 
     // if a banner ad is enabled and we have any available, place them in the grid
@@ -6274,7 +5803,7 @@ _PerfService.prototype = {
    * object to add a mark with the given name to the appropriate performance
    * timeline.
    *
-   * @param  {String} name  the name to give the current mark
+   * @param  {string} name  the name to give the current mark
    * @return {void}
    */
   mark: function mark(str) {
@@ -6285,8 +5814,8 @@ _PerfService.prototype = {
    * Calls the underlying getEntriesByName on the appropriate Window.performance
    * object.
    *
-   * @param  {String} name
-   * @param  {String} type eg "mark"
+   * @param  {string} name
+   * @param  {string} type eg "mark"
    * @return {Array}       Performance* objects
    */
   getEntriesByName: function getEntriesByName(entryName, type) {
@@ -6306,7 +5835,7 @@ _PerfService.prototype = {
    * created dynamically later.  Exactly how/when that shows up needs to be
    * investigated.
    *
-   * @return {Number} A double of milliseconds with a precision of 0.5us.
+   * @return {number} A double of milliseconds with a precision of 0.5us.
    */
   get timeOrigin() {
     return this._perf.timeOrigin;
@@ -6317,7 +5846,7 @@ _PerfService.prototype = {
    * should ([bug 1401406](https://bugzilla.mozilla.org/show_bug.cgi?id=1401406)
    * be comparable across both chrome and content.
    *
-   * @return {Number}
+   * @return {number}
    */
   absNow: function absNow() {
     return this.timeOrigin + this._perf.now();
@@ -6327,9 +5856,9 @@ _PerfService.prototype = {
    * This returns the absolute startTime from the most recent performance.mark()
    * with the given name.
    *
-   * @param  {String} name  the name to lookup the start time for
+   * @param  {string} name  the name to lookup the start time for
    *
-   * @return {Number}       the returned start time, as a DOMHighResTimeStamp
+   * @return {number}       the returned start time, as a DOMHighResTimeStamp
    *
    * @throws {Error}        "No Marks with the name ..." if none are available
    *
@@ -6975,10 +6504,6 @@ const INITIAL_STATE = {
     searchActive: false,
     locationSearchString: "",
     suggestedLocations: [],
-  },
-  TrendingSearch: {
-    suggestions: [],
-    collapsed: false,
   },
   // Widgets
   ListsWidget: {
@@ -7901,17 +7426,6 @@ function Ads(prevState = INITIAL_STATE.Ads, action) {
   }
 }
 
-function TrendingSearch(prevState = INITIAL_STATE.TrendingSearch, action) {
-  switch (action.type) {
-    case actionTypes.TRENDING_SEARCH_UPDATE:
-      return { ...prevState, suggestions: action.data };
-    case actionTypes.TRENDING_SEARCH_TOGGLE_COLLAPSE:
-      return { ...prevState, collapsed: action.data.collapsed };
-    default:
-      return prevState;
-  }
-}
-
 function TimerWidget(prevState = INITIAL_STATE.TimerWidget, action) {
   // fallback to current timerType in state if not provided in action
   const timerType = action.data?.timerType || prevState.timerType;
@@ -8015,7 +7529,6 @@ const reducers = {
   Search,
   TimerWidget,
   ListsWidget,
-  TrendingSearch,
   Wallpapers,
   Weather,
 };
@@ -8817,7 +8330,8 @@ class TopSiteLink extends (external_React_default()).PureComponent {
           reporting_url: link.sponsored_impression_url,
           advertiser: title.toLocaleLowerCase(),
           source: NEWTAB_SOURCE,
-          visible_topsites: visibleTopSites
+          visible_topsites: visibleTopSites,
+          frecency_boosted: link.type === "frecency-boost"
         }
         // For testing.
         ,
@@ -9037,7 +8551,8 @@ class TopSite extends (external_React_default()).PureComponent {
             reporting_url: this.props.link.sponsored_click_url,
             advertiser: title.toLocaleLowerCase(),
             source: NEWTAB_SOURCE,
-            visible_topsites: this.props.visibleTopSites
+            visible_topsites: this.props.visibleTopSites,
+            frecency_boosted: this.props.link.type === "frecency-boost"
           }
         }));
       } else {
@@ -9329,17 +8844,16 @@ class _TopSiteList extends (external_React_default()).PureComponent {
     if (this.state.activeIndex || this.state.activeIndex === 0) {
       return;
     }
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      // prevent the page from scrolling up/down while navigating.
-      e.preventDefault();
-    }
-    if (this.focusedRef?.nextSibling?.querySelector("a") && e.key === "ArrowDown") {
-      this.focusedRef.nextSibling.querySelector("a").tabIndex = 0;
-      this.focusedRef.nextSibling.querySelector("a").focus();
-    }
-    if (this.focusedRef?.previousSibling?.querySelector("a") && e.key === "ArrowUp") {
-      this.focusedRef.previousSibling.querySelector("a").tabIndex = 0;
-      this.focusedRef.previousSibling.querySelector("a").focus();
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      // Arrow direction should match visual navigation direction in RTL
+      const isRTL = document.dir === "rtl";
+      const navigateToPrevious = isRTL ? e.key === "ArrowRight" : e.key === "ArrowLeft";
+      const targetTopSite = navigateToPrevious ? this.focusedRef?.previousSibling : this.focusedRef?.nextSibling;
+      const targetAnchor = targetTopSite?.querySelector("a");
+      if (targetAnchor) {
+        targetAnchor.tabIndex = 0;
+        targetAnchor.focus();
+      }
     }
   }
   onWrapperFocus() {
@@ -9754,6 +9268,7 @@ function topSiteIconType(link) {
 
 /**
  * Iterates through TopSites and counts types of images.
+ *
  * @param acc Accumulator for reducer.
  * @param topsite Entry in TopSites.
  */
@@ -10962,7 +10477,7 @@ const PersonalizedCard = ({
   handleBlock,
   messageData
 }) => {
-  const wavingFox = "chrome://newtab/content/data/content/assets/waving-fox.svg";
+  const kitFox = "chrome://newtab/content/data/content/assets/kit.png";
   const onDismiss = (0,external_React_namespaceObject.useCallback)(() => {
     handleDismiss();
     handleBlock();
@@ -10988,7 +10503,7 @@ const PersonalizedCard = ({
   })), /*#__PURE__*/external_React_default().createElement("div", {
     className: "personalized-card-inner"
   }, /*#__PURE__*/external_React_default().createElement("img", {
-    src: wavingFox,
+    src: kitFox,
     alt: ""
   }), /*#__PURE__*/external_React_default().createElement("h2", null, messageData.content.cardTitle), /*#__PURE__*/external_React_default().createElement("p", null, messageData.content.cardMessage), /*#__PURE__*/external_React_default().createElement("div", {
     className: "personalized-card-cta-wrapper"
@@ -11378,7 +10893,7 @@ class _Weather extends (external_React_default()).PureComponent {
     const {
       values
     } = this.props.Prefs;
-    const systemValue = values[PREF_SYSTEM_SHOW_WEATHER];
+    const systemValue = values[PREF_SYSTEM_SHOW_WEATHER] && values["feeds.weatherfeed"];
     const experimentValue = values.trainhopConfig?.weather?.enabled;
     return systemValue || experimentValue;
   }
@@ -11571,15 +11086,12 @@ const Weather_Weather = (0,external_ReactRedux_namespaceObject.connect)(state =>
 
 
 
-
 // Prefs
 const CardSections_PREF_SECTIONS_CARDS_ENABLED = "discoverystream.sections.cards.enabled";
-const PREF_SECTIONS_CARDS_THUMBS_UP_DOWN_ENABLED = "discoverystream.sections.cards.thumbsUpDown.enabled";
 const PREF_SECTIONS_PERSONALIZATION_ENABLED = "discoverystream.sections.personalization.enabled";
 const CardSections_PREF_TOPICS_ENABLED = "discoverystream.topicLabels.enabled";
 const CardSections_PREF_TOPICS_SELECTED = "discoverystream.topicSelection.selectedTopics";
 const CardSections_PREF_TOPICS_AVAILABLE = "discoverystream.topicSelection.topics";
-const CardSections_PREF_THUMBS_UP_DOWN_ENABLED = "discoverystream.thumbsUpDown.enabled";
 const PREF_INTEREST_PICKER_ENABLED = "discoverystream.sections.interestPicker.enabled";
 const CardSections_PREF_VISIBLE_SECTIONS = "discoverystream.sections.interestPicker.visibleSections";
 const CardSections_PREF_BILLBOARD_ENABLED = "newtabAdSize.billboard";
@@ -11588,13 +11100,9 @@ const CardSections_PREF_LEADERBOARD_ENABLED = "newtabAdSize.leaderboard";
 const CardSections_PREF_LEADERBOARD_POSITION = "newtabAdSize.leaderboard.position";
 const PREF_REFINED_CARDS_ENABLED = "discoverystream.refinedCardsLayout.enabled";
 const PREF_INFERRED_PERSONALIZATION_USER = "discoverystream.sections.personalization.inferred.user.enabled";
-const CardSections_PREF_TRENDING_SEARCH = "trendingSearch.enabled";
-const CardSections_PREF_TRENDING_SEARCH_SYSTEM = "system.trendingSearch.enabled";
-const CardSections_PREF_SEARCH_ENGINE = "trendingSearch.defaultSearchEngine";
-const CardSections_PREF_TRENDING_SEARCH_VARIANT = "trendingSearch.variant";
 const CardSections_PREF_DAILY_BRIEF_SECTIONID = "discoverystream.dailyBrief.sectionId";
 const CardSections_PREF_SPOCS_STARTUPCACHE_ENABLED = "discoverystream.spocs.startupCache.enabled";
-function getLayoutData(responsiveLayouts, index, refinedCardsLayout, sectionKey) {
+function getLayoutData(responsiveLayouts, index, refinedCardsLayout) {
   let layoutData = {
     classNames: [],
     imageSizes: {}
@@ -11602,19 +11110,9 @@ function getLayoutData(responsiveLayouts, index, refinedCardsLayout, sectionKey)
   responsiveLayouts.forEach(layout => {
     layout.tiles.forEach((tile, tileIndex) => {
       if (tile.position === index) {
-        // When trending searches should be placed in the `top_stories_section`,
-        // we update the layout so that the first item is always a medium card to make
-        // room for the trending search widget
-        if (sectionKey === "top_stories_section" && tileIndex === 0) {
-          layoutData.classNames.push(`col-${layout.columnCount}-medium`);
-          layoutData.classNames.push(`col-${layout.columnCount}-position-${tileIndex}`);
-          layoutData.imageSizes[layout.columnCount] = "medium";
-          layoutData.classNames.push(`col-${layout.columnCount}-hide-excerpt`);
-        } else {
-          layoutData.classNames.push(`col-${layout.columnCount}-${tile.size}`);
-          layoutData.classNames.push(`col-${layout.columnCount}-position-${tileIndex}`);
-          layoutData.imageSizes[layout.columnCount] = tile.size;
-        }
+        layoutData.classNames.push(`col-${layout.columnCount}-${tile.size}`);
+        layoutData.classNames.push(`col-${layout.columnCount}-position-${tileIndex}`);
+        layoutData.imageSizes[layout.columnCount] = tile.size;
 
         // The API tells us whether the tile should show the excerpt or not.
         // Apply extra styles accordingly.
@@ -11732,15 +11230,10 @@ function CardSection({
   };
   const showTopics = prefs[CardSections_PREF_TOPICS_ENABLED];
   const mayHaveSectionsCards = prefs[CardSections_PREF_SECTIONS_CARDS_ENABLED];
-  const mayHaveSectionsCardsThumbsUpDown = prefs[PREF_SECTIONS_CARDS_THUMBS_UP_DOWN_ENABLED];
-  const mayHaveThumbsUpDown = prefs[CardSections_PREF_THUMBS_UP_DOWN_ENABLED];
   const selectedTopics = prefs[CardSections_PREF_TOPICS_SELECTED];
   const availableTopics = prefs[CardSections_PREF_TOPICS_AVAILABLE];
   const refinedCardsLayout = prefs[PREF_REFINED_CARDS_ENABLED];
   const spocsStartupCacheEnabled = prefs[CardSections_PREF_SPOCS_STARTUPCACHE_ENABLED];
-  const trendingEnabled = prefs[CardSections_PREF_TRENDING_SEARCH] && prefs[CardSections_PREF_TRENDING_SEARCH_SYSTEM] && prefs[CardSections_PREF_SEARCH_ENGINE]?.toLowerCase() === "google";
-  const trendingVariant = prefs[CardSections_PREF_TRENDING_SEARCH_VARIANT];
-  const shouldShowTrendingSearch = trendingEnabled && trendingVariant === "b";
   const mayHaveSectionsPersonalization = prefs[PREF_SECTIONS_PERSONALIZATION_ENABLED];
   const {
     sectionKey,
@@ -11766,9 +11259,6 @@ function CardSection({
 
   // Ref to hold the section element
   const sectionRefs = useIntersectionObserver(handleIntersection);
-
-  // Only show thumbs up/down buttons if both default thumbs and sections thumbs prefs are enabled
-  const mayHaveCombinedThumbsUpDown = mayHaveSectionsCardsThumbsUpDown && mayHaveThumbsUpDown;
   const onFollowClick = (0,external_React_namespaceObject.useCallback)(() => {
     const updatedSectionData = {
       ...sectionPersonalization,
@@ -11890,7 +11380,7 @@ function CardSection({
     className: `ds-section-grid ds-card-grid`,
     onKeyDown: handleCardKeyDown
   }, section.data.slice(0, maxTile).map((rec, index) => {
-    const layoutData = getLayoutData(responsiveLayouts, index, refinedCardsLayout, shouldShowTrendingSearch && sectionKey);
+    const layoutData = getLayoutData(responsiveLayouts, index, refinedCardsLayout);
     const {
       classNames,
       imageSizes
@@ -11939,7 +11429,6 @@ function CardSection({
       received_rank: rec.received_rank,
       format: rec.format,
       alt_text: rec.alt_text,
-      mayHaveThumbsUpDown: mayHaveCombinedThumbsUpDown,
       mayHaveSectionsCards: mayHaveSectionsCards,
       showTopics: shouldShowLabels,
       selectedTopics: selectedTopics,
@@ -11956,9 +11445,7 @@ function CardSection({
       tabIndex: index === focusedIndex ? 0 : -1,
       onFocus: () => onCardFocus(index)
     });
-    return index === 0 && shouldShowTrendingSearch && sectionKey === "top_stories_section" ? [card, /*#__PURE__*/external_React_default().createElement(TrendingSearches, {
-      key: "trending"
-    })] : [card];
+    return [card];
   })));
 }
 function CardSections({
@@ -12130,7 +11617,8 @@ const PREF_WIDGETS_LISTS_BADGE_ENABLED = "widgets.lists.badge.enabled";
 const PREF_WIDGETS_LISTS_BADGE_LABEL = "widgets.lists.badge.label";
 function Lists({
   dispatch,
-  handleUserInteraction
+  handleUserInteraction,
+  isMaximized
 }) {
   const prefs = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values);
   const {
@@ -12595,7 +12083,7 @@ function Lists({
   const badgeEnabled = (nimbusBadgeEnabled || nimbusBadgeTrainhopEnabled) ?? prefs[PREF_WIDGETS_LISTS_BADGE_ENABLED] ?? false;
   const badgeLabel = (nimbusBadgeLabel || nimbusBadgeTrainhopLabel) ?? prefs[PREF_WIDGETS_LISTS_BADGE_LABEL] ?? "";
   return /*#__PURE__*/external_React_default().createElement("article", {
-    className: "lists",
+    className: `lists ${isMaximized ? "is-maximized" : ""}`,
     ref: el => {
       listsRef.current = [el];
     }
@@ -12939,6 +12427,27 @@ const formatTime = seconds => {
 };
 
 /**
+ * Validates that the inputs in the timer only allow numerical digits (0-9)
+ *
+ * @param input - The character being input
+ * @returns boolean - true if valid numeric input, false otherwise
+ */
+const isNumericValue = input => {
+  // Check for null/undefined input or non-numeric characters
+  return input && /^\d+$/.test(input);
+};
+
+/**
+ * Validates if adding a new digit would exceed the 2-character limit
+ *
+ * @param currentValue - The current value in the field
+ * @returns boolean - true if at 2-character limit, false otherwise
+ */
+const isAtMaxLength = currentValue => {
+  return currentValue.length >= 2;
+};
+
+/**
  * Converts a polar coordinate (angle on circle) into a percentage-based [x,y] position for clip-path
  *
  * @param cx
@@ -12975,7 +12484,8 @@ const getClipPath = progress => {
 };
 const FocusTimer = ({
   dispatch,
-  handleUserInteraction
+  handleUserInteraction,
+  isMaximized
 }) => {
   const [timeLeft, setTimeLeft] = (0,external_React_namespaceObject.useState)(0);
   // calculated value for the progress circle; 1 = 100%
@@ -13012,10 +12522,17 @@ const FocusTimer = ({
   (0,external_React_namespaceObject.useEffect)(() => {
     // resets default values after timer ends
     let interval;
+    let hasReachedZero = false;
     if (isRunning && duration > 0) {
       interval = setInterval(() => {
+        const currentTime = Math.floor(Date.now() / 1000);
+        const elapsed = currentTime - startTime;
         const remaining = calculateTimeRemaining(duration, startTime);
-        if (remaining <= 0) {
+
+        // using setTimeLeft to trigger a re-render of the component to show live countdown each second
+        setTimeLeft(remaining);
+        setProgress((initialDuration - remaining) / initialDuration);
+        if (elapsed >= duration && hasReachedZero) {
           clearInterval(interval);
           (0,external_ReactRedux_namespaceObject.batch)(() => {
             dispatch(actionCreators.AlsoToMain({
@@ -13060,13 +12577,11 @@ const FocusTimer = ({
                   }
                 }));
               });
-            }, 1500);
-          }, 1500);
+            }, 500);
+          }, 1000);
+        } else if (elapsed >= duration) {
+          hasReachedZero = true;
         }
-
-        // using setTimeLeft to trigger a re-render of the component to show live countdown each second
-        setTimeLeft(remaining);
-        setProgress((initialDuration - remaining) / initialDuration);
       }, 1000);
     }
 
@@ -13245,13 +12760,9 @@ const FocusTimer = ({
     const values = e.target.innerText.trim();
 
     // only allow numerical digits 0–9 for time input
-    if (!/^\d+$/.test(input)) {
+    if (!isNumericValue(input)) {
       e.preventDefault();
-    }
-
-    // only allow 2 values each for minutes and seconds
-    if (values.length >= 2) {
-      e.preventDefault();
+      return;
     }
     const selection = window.getSelection();
     const selectedText = selection.toString();
@@ -13269,6 +12780,12 @@ const FocusTimer = ({
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
+      return;
+    }
+
+    // only allow 2 values each for minutes and seconds
+    if (isAtMaxLength(values)) {
+      e.preventDefault();
     }
   };
   const handleFocus = e => {
@@ -13323,7 +12840,7 @@ const FocusTimer = ({
     handleTimerInteraction();
   }
   return timerData ? /*#__PURE__*/external_React_default().createElement("article", {
-    className: "focus-timer",
+    className: `focus-timer ${isMaximized ? "is-maximized" : ""}`,
     ref: el => {
       timerRef.current = [el];
     }
@@ -13494,6 +13011,8 @@ const PREF_WIDGETS_LISTS_ENABLED = "widgets.lists.enabled";
 const PREF_WIDGETS_SYSTEM_LISTS_ENABLED = "widgets.system.lists.enabled";
 const PREF_WIDGETS_TIMER_ENABLED = "widgets.focusTimer.enabled";
 const PREF_WIDGETS_SYSTEM_TIMER_ENABLED = "widgets.system.focusTimer.enabled";
+const PREF_WIDGETS_MAXIMIZED = "widgets.maximized";
+const PREF_WIDGETS_SYSTEM_MAXIMIZED = "widgets.system.maximized";
 
 // resets timer to default values (exported for testing)
 // In practice, this logic runs inside a useEffect when
@@ -13529,6 +13048,7 @@ function Widgets() {
   } = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Messages);
   const timerType = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.TimerWidget.timerType);
   const timerData = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.TimerWidget);
+  const isMaximized = prefs[PREF_WIDGETS_MAXIMIZED];
   const dispatch = (0,external_ReactRedux_namespaceObject.useDispatch)();
   const nimbusListsEnabled = prefs.widgetsConfig?.listsEnabled;
   const nimbusTimerEnabled = prefs.widgetsConfig?.timerEnabled;
@@ -13553,6 +13073,36 @@ function Widgets() {
     // Update the ref to track current state
     prevTimerEnabledRef.current = isTimerEnabled;
   }, [timerEnabled, timerData, dispatch, timerType]);
+
+  // Sends a dispatch to disable all widgets
+  function handleHideAllWidgetsClick(e) {
+    e.preventDefault();
+    (0,external_ReactRedux_namespaceObject.batch)(() => {
+      dispatch(actionCreators.SetPref(PREF_WIDGETS_LISTS_ENABLED, false));
+      dispatch(actionCreators.SetPref(PREF_WIDGETS_TIMER_ENABLED, false));
+    });
+  }
+  function handleHideAllWidgetsKeyDown(e) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      (0,external_ReactRedux_namespaceObject.batch)(() => {
+        dispatch(actionCreators.SetPref(PREF_WIDGETS_LISTS_ENABLED, false));
+        dispatch(actionCreators.SetPref(PREF_WIDGETS_TIMER_ENABLED, false));
+      });
+    }
+  }
+
+  // Toggles the maximized state of widgets
+  function handleToggleMaximizeClick(e) {
+    e.preventDefault();
+    dispatch(actionCreators.SetPref(PREF_WIDGETS_MAXIMIZED, !isMaximized));
+  }
+  function handleToggleMaximizeKeyDown(e) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      dispatch(actionCreators.SetPref(PREF_WIDGETS_MAXIMIZED, !isMaximized));
+    }
+  }
   function handleUserInteraction(widgetName) {
     const prefName = `widgets.${widgetName}.interaction`;
     const hasInteracted = prefs[prefName];
@@ -13567,14 +13117,40 @@ function Widgets() {
   return /*#__PURE__*/external_React_default().createElement("div", {
     className: "widgets-wrapper"
   }, /*#__PURE__*/external_React_default().createElement("div", {
-    className: "widgets-container"
+    className: "widgets-section-container"
+  }, /*#__PURE__*/external_React_default().createElement("div", {
+    className: "widgets-title-container"
+  }, /*#__PURE__*/external_React_default().createElement("h1", {
+    "data-l10n-id": "newtab-widget-section-title"
+  }), prefs[PREF_WIDGETS_SYSTEM_MAXIMIZED] && /*#__PURE__*/external_React_default().createElement("moz-button", {
+    id: "toggle-widgets-size-button",
+    type: "icon ghost",
+    size: "small"
+    // Toggle the icon and hover text
+    ,
+    "data-l10n-id": isMaximized ? "newtab-widget-section-maximize" : "newtab-widget-section-minimize",
+    iconsrc: `chrome://browser/skin/${isMaximized ? "fullscreen" : "fullscreen-exit"}.svg`,
+    onClick: handleToggleMaximizeClick,
+    onKeyDown: handleToggleMaximizeKeyDown
+  }), /*#__PURE__*/external_React_default().createElement("moz-button", {
+    id: "hide-all-widgets-button",
+    type: "icon ghost",
+    size: "small",
+    "data-l10n-id": "newtab-widget-section-hide-all-button",
+    iconsrc: "chrome://global/skin/icons/close.svg",
+    onClick: handleHideAllWidgetsClick,
+    onKeyDown: handleHideAllWidgetsKeyDown
+  })), /*#__PURE__*/external_React_default().createElement("div", {
+    className: `widgets-container ${isMaximized ? "is-maximized" : ""}`
   }, listsEnabled && /*#__PURE__*/external_React_default().createElement(Lists, {
     dispatch: dispatch,
-    handleUserInteraction: handleUserInteraction
+    handleUserInteraction: handleUserInteraction,
+    isMaximized: isMaximized
   }), timerEnabled && /*#__PURE__*/external_React_default().createElement(FocusTimer, {
     dispatch: dispatch,
-    handleUserInteraction: handleUserInteraction
-  })), messageData?.content?.messageType === "WidgetMessage" && /*#__PURE__*/external_React_default().createElement(MessageWrapper, {
+    handleUserInteraction: handleUserInteraction,
+    isMaximized: isMaximized
+  }))), messageData?.content?.messageType === "WidgetMessage" && /*#__PURE__*/external_React_default().createElement(MessageWrapper, {
     dispatch: dispatch
   }, /*#__PURE__*/external_React_default().createElement(WidgetsFeatureHighlight, {
     dispatch: dispatch
@@ -13924,9 +13500,12 @@ function SectionsMgmtPanel_extends() { return SectionsMgmtPanel_extends = Object
 
 function SectionsMgmtPanel({
   exitEventFired,
-  pocketEnabled
+  pocketEnabled,
+  onSubpanelToggle,
+  togglePanel,
+  showPanel
 }) {
-  const [showPanel, setShowPanel] = (0,external_React_namespaceObject.useState)(false); // State management with useState
+  const arrowButtonRef = (0,external_React_namespaceObject.useRef)(null);
   const {
     sectionPersonalization
   } = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.DiscoveryStream);
@@ -14039,17 +13618,25 @@ function SectionsMgmtPanel({
 
   // Close followed/blocked topic subpanel when parent menu is closed
   (0,external_React_namespaceObject.useEffect)(() => {
-    if (exitEventFired) {
-      setShowPanel(false);
+    if (exitEventFired && showPanel) {
+      togglePanel();
     }
-  }, [exitEventFired]);
-  const togglePanel = () => {
-    setShowPanel(prevShowPanel => !prevShowPanel);
+  }, [exitEventFired, showPanel, togglePanel]);
 
-    // Fire when the panel is open
-    if (!showPanel) {
+  // Notify parent menu when subpanel opens/closes
+  (0,external_React_namespaceObject.useEffect)(() => {
+    if (onSubpanelToggle) {
+      onSubpanelToggle(showPanel);
+    }
+  }, [showPanel, onSubpanelToggle]);
+  (0,external_React_namespaceObject.useEffect)(() => {
+    if (showPanel) {
       updateCachedData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPanel]);
+  const handlePanelEntered = () => {
+    arrowButtonRef.current?.focus();
   };
   const followedSectionsList = followedSectionsData.map(({
     sectionKey,
@@ -14118,10 +13705,12 @@ function SectionsMgmtPanel({
     in: showPanel,
     timeout: 300,
     classNames: "sections-mgmt-panel",
-    unmountOnExit: true
+    unmountOnExit: true,
+    onEntered: handlePanelEntered
   }, /*#__PURE__*/external_React_default().createElement("div", {
     className: "sections-mgmt-panel"
   }, /*#__PURE__*/external_React_default().createElement("button", {
+    ref: arrowButtonRef,
     className: "arrow-button",
     onClick: togglePanel
   }, /*#__PURE__*/external_React_default().createElement("h1", {
@@ -14184,11 +13773,13 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
     this.focusCategory = this.focusCategory.bind(this);
     this.handleUpload = this.handleUpload.bind(this);
     this.handleBack = this.handleBack.bind(this);
+    this.handleWallpaperListEntered = this.handleWallpaperListEntered.bind(this);
     this.getRGBColors = this.getRGBColors.bind(this);
     this.prefersHighContrastQuery = null;
     this.prefersDarkQuery = null;
     this.categoryRef = []; // store references for wallpaper category list
     this.wallpaperRef = []; // store reference for wallpaper selection list
+    this.arrowButtonRef = /*#__PURE__*/external_React_default().createRef(); // Used to focus arrow button when category opens
     this.customColorPickerRef = /*#__PURE__*/external_React_default().createRef(); // Used to determine contrast icon color for custom color picker
     this.customColorInput = /*#__PURE__*/external_React_default().createRef(); // Used to determine contrast icon color for custom color picker
     this.state = {
@@ -14301,7 +13892,7 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
     if (event.key === "Tab") {
       if (event.shiftKey) {
         event.preventDefault();
-        this.backToMenuButton?.focus();
+        this.arrowButtonRef.current?.focus();
       } else {
         event.preventDefault(); // prevent tabbing within wallpaper selection. We should only be using the Tab key to tab between groups
       }
@@ -14362,6 +13953,11 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
       activeCategory: event.target.id
     });
     this.handleUserEvent(actionTypes.WALLPAPER_CATEGORY_CLICK, event.target.id);
+
+    // Notify parent menu when subpanel opens
+    if (this.props.onSubpanelToggle) {
+      this.props.onSubpanelToggle(true);
+    }
     let fluent_id;
     switch (event.target.id) {
       case "abstracts":
@@ -14375,6 +13971,10 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
         break;
       case "solid-colors":
         fluent_id = "newtab-wallpaper-category-title-colors";
+        break;
+      case "firefox":
+        fluent_id = "newtab-wallpaper-category-title-firefox";
+        break;
     }
     this.setState({
       activeCategoryFluentID: fluent_id
@@ -14455,11 +14055,19 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
     this.setState({
       activeCategory: null
     }, () => {
+      // Notify parent menu when subpanel closes
+      if (this.props.onSubpanelToggle) {
+        this.props.onSubpanelToggle(false);
+      }
+
       // Wait for the category grid to be back in the DOM
       requestAnimationFrame(() => {
         this.focusCategory(this.state.focusedCategoryIndex);
       });
     });
+  }
+  handleWallpaperListEntered() {
+    this.arrowButtonRef.current?.focus();
   }
 
   // Record user interaction when changing wallpaper and reseting wallpaper to default
@@ -14485,6 +14093,22 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
   }
   isWallpaperColorDark([r, g, b]) {
     return 0.2125 * r + 0.7154 * g + 0.0721 * b <= 110;
+  }
+  sortWallpapersByOrder(wallpapers) {
+    return wallpapers.sort((a, b) => {
+      const aOrder = a.order || 0;
+      const bOrder = b.order || 0;
+      if (aOrder === 0 && bOrder === 0) {
+        return 0;
+      }
+      if (aOrder === 0) {
+        return 1;
+      }
+      if (bOrder === 0) {
+        return -1;
+      }
+      return aOrder - bOrder;
+    });
   }
   render() {
     const prefs = this.props.Prefs.values;
@@ -14586,10 +14210,11 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
       className: "category-list"
     }, categories.map((category, index) => {
       const filteredList = wallpaperList.filter(wallpaper => wallpaper.category === category);
-      const activeWallpaperObj = activeWallpaper && filteredList.find(wp => wp.title === activeWallpaper);
+      const sortedList = this.sortWallpapersByOrder(filteredList);
+      const activeWallpaperObj = activeWallpaper && sortedList.find(wp => wp.title === activeWallpaper);
       // Detect custom solid color
       const isCustomSolidColor = category === "solid-colors" && activeWallpaper.startsWith("solid-color-picker");
-      const thumbnail = activeWallpaperObj || filteredList[0];
+      const thumbnail = activeWallpaperObj || sortedList[0];
       let fluent_id;
       switch (category) {
         case "abstracts":
@@ -14606,10 +14231,15 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
           break;
         case "solid-colors":
           fluent_id = "newtab-wallpaper-category-title-colors";
+          break;
+        case "firefox":
+          fluent_id = "newtab-wallpaper-category-title-firefox";
+          break;
       }
       let style = {};
       if (thumbnail?.wallpaperUrl) {
         style.backgroundImage = `url(${thumbnail.wallpaperUrl})`;
+        style.backgroundPosition = thumbnail.background_position || "center";
       } else {
         style.backgroundColor = thumbnail?.solid_color || "";
       }
@@ -14675,29 +14305,30 @@ class _WallpaperCategories extends (external_React_default()).PureComponent {
       in: !!activeCategory,
       timeout: 300,
       classNames: "wallpaper-list",
-      unmountOnExit: true
+      unmountOnExit: true,
+      onEntered: this.handleWallpaperListEntered
     }, /*#__PURE__*/external_React_default().createElement("section", {
       className: "category wallpaper-list ignore-color-mode"
     }, /*#__PURE__*/external_React_default().createElement("button", {
+      ref: this.arrowButtonRef,
       className: "arrow-button",
       "data-l10n-id": activeCategoryFluentID,
-      onClick: this.handleBack,
-      ref: el => {
-        this.backToMenuButton = el;
-      }
+      onClick: this.handleBack
     }), /*#__PURE__*/external_React_default().createElement("div", {
       role: "grid",
       "aria-label": "Wallpaper selection. Use arrow keys to navigate."
-    }, /*#__PURE__*/external_React_default().createElement("fieldset", null, filteredWallpapers.map(({
-      title,
-      theme,
+    }, /*#__PURE__*/external_React_default().createElement("fieldset", null, this.sortWallpapersByOrder(filteredWallpapers).map(({
+      background_position,
       fluent_id,
       solid_color,
+      theme,
+      title,
       wallpaperUrl
     }, index) => {
       let style = {};
       if (wallpaperUrl) {
         style.backgroundImage = `url(${wallpaperUrl})`;
+        style.backgroundPosition = background_position || "center";
       } else {
         style.backgroundColor = solid_color || "";
       }
@@ -14764,7 +14395,7 @@ class ContentSection extends (external_React_default()).PureComponent {
     }));
   }
   onPreferenceSelect(e) {
-    // eventSource: WEATHER | TOP_SITES | TOP_STORIES | WIDGET_LISTS | WIDGET_TIMER | TRENDING_SEARCH
+    // eventSource: WEATHER | TOP_SITES | TOP_STORIES | WIDGET_LISTS | WIDGET_TIMER
     const {
       preference,
       eventSource
@@ -14822,7 +14453,6 @@ class ContentSection extends (external_React_default()).PureComponent {
       pocketRegion,
       mayHaveInferredPersonalization,
       mayHaveWeather,
-      mayHaveTrendingSearch,
       mayHaveWidgets,
       mayHaveTimerWidget,
       mayHaveListsWidget,
@@ -14831,13 +14461,15 @@ class ContentSection extends (external_React_default()).PureComponent {
       activeWallpaper,
       setPref,
       mayHaveTopicSections,
-      exitEventFired
+      exitEventFired,
+      onSubpanelToggle,
+      toggleSectionsMgmtPanel,
+      showSectionsMgmtPanel
     } = this.props;
     const {
       topSitesEnabled,
       pocketEnabled,
       weatherEnabled,
-      trendingSearchEnabled,
       showInferredPersonalizationEnabled,
       topSitesRowsCount
     } = enabledSections;
@@ -14852,7 +14484,8 @@ class ContentSection extends (external_React_default()).PureComponent {
     }, /*#__PURE__*/external_React_default().createElement(WallpaperCategories, {
       setPref: setPref,
       activeWallpaper: activeWallpaper,
-      exitEventFired: exitEventFired
+      exitEventFired: exitEventFired,
+      onSubpanelToggle: onSubpanelToggle
     })), !mayHaveWidgets && /*#__PURE__*/external_React_default().createElement("span", {
       className: "divider",
       role: "separator"
@@ -14894,16 +14527,6 @@ class ContentSection extends (external_React_default()).PureComponent {
       "data-preference": "widgets.focusTimer.enabled",
       "data-eventSource": "WIDGET_TIMER",
       "data-l10n-id": "newtab-custom-widget-timer-toggle"
-    })), mayHaveTrendingSearch && /*#__PURE__*/external_React_default().createElement("div", {
-      id: "trending-search-section",
-      className: "section"
-    }, /*#__PURE__*/external_React_default().createElement("moz-toggle", {
-      id: "trending-search-toggle",
-      pressed: trendingSearchEnabled || null,
-      onToggle: this.onPreferenceSelect,
-      "data-preference": "trendingSearch.enabled",
-      "data-eventSource": "TRENDING_SEARCH",
-      "data-l10n-id": "newtab-custom-widget-trending-search-toggle"
     })), /*#__PURE__*/external_React_default().createElement("span", {
       className: "divider",
       role: "separator"
@@ -14919,16 +14542,6 @@ class ContentSection extends (external_React_default()).PureComponent {
       "data-preference": "showWeather",
       "data-eventSource": "WEATHER",
       "data-l10n-id": "newtab-custom-weather-toggle"
-    })), !mayHaveWidgets && mayHaveTrendingSearch && /*#__PURE__*/external_React_default().createElement("div", {
-      id: "trending-search-section",
-      className: "section"
-    }, /*#__PURE__*/external_React_default().createElement("moz-toggle", {
-      id: "trending-search-toggle",
-      pressed: trendingSearchEnabled || null,
-      onToggle: this.onPreferenceSelect,
-      "data-preference": "trendingSearch.enabled",
-      "data-eventSource": "TRENDING_SEARCH",
-      "data-l10n-id": "newtab-custom-trending-search-toggle"
     })), /*#__PURE__*/external_React_default().createElement("div", {
       id: "shortcuts-section",
       className: "section"
@@ -15010,7 +14623,10 @@ class ContentSection extends (external_React_default()).PureComponent {
       "data-l10n-id": "newtab-custom-stories-personalized-checkbox-label"
     })), mayHaveTopicSections && /*#__PURE__*/external_React_default().createElement(SectionsMgmtPanel, {
       exitEventFired: exitEventFired,
-      pocketEnabled: pocketEnabled
+      pocketEnabled: pocketEnabled,
+      onSubpanelToggle: onSubpanelToggle,
+      togglePanel: toggleSectionsMgmtPanel,
+      showPanel: showSectionsMgmtPanel
     }))))))), /*#__PURE__*/external_React_default().createElement("span", {
       className: "divider",
       role: "separator"
@@ -15037,9 +14653,16 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
     super(props);
     this.onEntered = this.onEntered.bind(this);
     this.onExited = this.onExited.bind(this);
+    this.onSubpanelToggle = this.onSubpanelToggle.bind(this);
     this.state = {
-      exitEventFired: false
+      exitEventFired: false,
+      subpanelOpen: false
     };
+  }
+  onSubpanelToggle(isOpen) {
+    this.setState({
+      subpanelOpen: isOpen
+    });
   }
   onEntered() {
     this.setState({
@@ -15073,12 +14696,12 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
         }
       },
       ref: c => this.openButton = c
-    }, /*#__PURE__*/external_React_default().createElement("div", null, /*#__PURE__*/external_React_default().createElement("img", {
+    }, /*#__PURE__*/external_React_default().createElement("label", {
+      "data-l10n-id": "newtab-customize-panel-icon-button-label"
+    }), /*#__PURE__*/external_React_default().createElement("div", null, /*#__PURE__*/external_React_default().createElement("img", {
       role: "presentation",
       src: "chrome://global/skin/icons/edit-outline.svg"
-    })), /*#__PURE__*/external_React_default().createElement("label", {
-      "data-l10n-id": "newtab-customize-panel-icon-button-label"
-    }))), /*#__PURE__*/external_React_default().createElement(external_ReactTransitionGroup_namespaceObject.CSSTransition, {
+    })))), /*#__PURE__*/external_React_default().createElement(external_ReactTransitionGroup_namespaceObject.CSSTransition, {
       timeout: 250,
       classNames: "customize-animate",
       in: this.props.showing,
@@ -15086,7 +14709,9 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
       onExited: this.onExited,
       appear: true
     }, /*#__PURE__*/external_React_default().createElement("div", {
-      className: "customize-menu",
+      className: "customize-menu-animate-wrapper"
+    }, /*#__PURE__*/external_React_default().createElement("div", {
+      className: `customize-menu ${this.state.subpanelOpen ? "subpanel-open" : ""}`,
       role: "dialog",
       "data-l10n-id": "newtab-settings-dialog-label"
     }, /*#__PURE__*/external_React_default().createElement("div", {
@@ -15109,13 +14734,15 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
       mayHaveTopicSections: this.props.mayHaveTopicSections,
       mayHaveInferredPersonalization: this.props.mayHaveInferredPersonalization,
       mayHaveWeather: this.props.mayHaveWeather,
-      mayHaveTrendingSearch: this.props.mayHaveTrendingSearch,
       mayHaveWidgets: this.props.mayHaveWidgets,
       mayHaveTimerWidget: this.props.mayHaveTimerWidget,
       mayHaveListsWidget: this.props.mayHaveListsWidget,
       dispatch: this.props.dispatch,
-      exitEventFired: this.state.exitEventFired
-    }))));
+      exitEventFired: this.state.exitEventFired,
+      onSubpanelToggle: this.onSubpanelToggle,
+      toggleSectionsMgmtPanel: this.props.toggleSectionsMgmtPanel,
+      showSectionsMgmtPanel: this.props.showSectionsMgmtPanel
+    })))));
   }
 }
 const CustomizeMenu = (0,external_ReactRedux_namespaceObject.connect)(state => ({
@@ -15187,7 +14814,6 @@ function Logo() {
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* globals ContentSearchUIController, ContentSearchHandoffUIController */
-
 
 
 
@@ -15309,9 +14935,6 @@ class _Search extends (external_React_default()).PureComponent {
    */
   render() {
     const wrapperClassName = ["search-wrapper", this.props.disable && "search-disabled", this.props.fakeFocus && "fake-focus"].filter(v => v).join(" ");
-    const prefs = this.props.Prefs.values;
-    const trendingSearchEnabled = prefs["trendingSearch.enabled"] && prefs["system.trendingSearch.enabled"] && prefs["trendingSearch.defaultSearchEngine"]?.toLowerCase() === "google";
-    const trendingSearchVariant = this.props.Prefs.values["trendingSearch.variant"];
     return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("div", {
       className: wrapperClassName
     }, this.props.showLogo && /*#__PURE__*/external_React_default().createElement(Logo, null), !this.props.handoffEnabled && /*#__PURE__*/external_React_default().createElement("div", {
@@ -15327,7 +14950,7 @@ class _Search extends (external_React_default()).PureComponent {
       className: "search-button",
       "data-l10n-id": "newtab-search-box-search-button",
       onClick: this.onSearchClick
-    }), trendingSearchEnabled && (trendingSearchVariant === "a" || trendingSearchVariant === "c") && /*#__PURE__*/external_React_default().createElement(TrendingSearches, null)), this.props.handoffEnabled && /*#__PURE__*/external_React_default().createElement("div", {
+    })), this.props.handoffEnabled && /*#__PURE__*/external_React_default().createElement("div", {
       className: "search-inner-wrapper"
     }, /*#__PURE__*/external_React_default().createElement("button", {
       className: "search-handoff-button",
@@ -15349,7 +14972,7 @@ class _Search extends (external_React_default()).PureComponent {
       ref: el => {
         this.fakeCaret = el;
       }
-    })), trendingSearchEnabled && (trendingSearchVariant === "a" || trendingSearchVariant === "c") && /*#__PURE__*/external_React_default().createElement(TrendingSearches, null))));
+    })))));
   }
 }
 const Search_Search = (0,external_ReactRedux_namespaceObject.connect)(state => ({
@@ -15371,38 +14994,6 @@ function DownloadModalToggle({
   }, /*#__PURE__*/external_React_default().createElement("div", {
     className: "icon icon-device-phone"
   }));
-}
-
-;// CONCATENATED MODULE: ./content-src/components/Notifications/Toasts/ThumbUpThumbDownToast.jsx
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-
-function ThumbUpThumbDownToast({
-  onDismissClick,
-  onAnimationEnd
-}) {
-  const mozMessageBarRef = (0,external_React_namespaceObject.useRef)(null);
-  (0,external_React_namespaceObject.useEffect)(() => {
-    const {
-      current: mozMessageBarElement
-    } = mozMessageBarRef;
-    mozMessageBarElement.addEventListener("message-bar:user-dismissed", onDismissClick, {
-      once: true
-    });
-    return () => {
-      mozMessageBarElement.removeEventListener("message-bar:user-dismissed", onDismissClick);
-    };
-  }, [onDismissClick]);
-  return /*#__PURE__*/external_React_default().createElement("moz-message-bar", {
-    type: "success",
-    class: "notification-feed-item",
-    dismissable: true,
-    "data-l10n-id": "newtab-toast-thumbs-up-or-down2",
-    ref: mozMessageBarRef,
-    onAnimationEnd: onAnimationEnd
-  });
 }
 
 ;// CONCATENATED MODULE: ./content-src/components/Notifications/Toasts/ReportContentToast.jsx
@@ -15446,7 +15037,6 @@ function ReportContentToast({
 
 
 
-
 function Notifications_Notifications({
   dispatch
 }) {
@@ -15480,13 +15070,6 @@ function Notifications_Notifications({
     switch (latestToastItem) {
       case "reportSuccessToast":
         return /*#__PURE__*/external_React_default().createElement(ReportContentToast, {
-          onDismissClick: syncHiddenToastData,
-          onAnimationEnd: syncHiddenToastData,
-          key: toastCounter
-        });
-      case "thumbsUpToast":
-      case "thumbsDownToast":
-        return /*#__PURE__*/external_React_default().createElement(ThumbUpThumbDownToast, {
           onDismissClick: syncHiddenToastData,
           onAnimationEnd: syncHiddenToastData,
           key: toastCounter
@@ -16040,6 +15623,7 @@ class BaseContent extends (external_React_default()).PureComponent {
     this.toggleDownloadHighlight = this.toggleDownloadHighlight.bind(this);
     this.handleDismissDownloadHighlight = this.handleDismissDownloadHighlight.bind(this);
     this.applyBodyClasses = this.applyBodyClasses.bind(this);
+    this.toggleSectionsMgmtPanel = this.toggleSectionsMgmtPanel.bind(this);
     this.state = {
       fixedSearch: false,
       firstVisibleTimestamp: null,
@@ -16047,7 +15631,8 @@ class BaseContent extends (external_React_default()).PureComponent {
       fixedNavStyle: {},
       wallpaperTheme: "",
       showDownloadHighlightOverride: null,
-      visible: false
+      visible: false,
+      showSectionsMgmtPanel: false
     };
   }
   setFirstVisibleTimestamp() {
@@ -16141,6 +15726,17 @@ class BaseContent extends (external_React_default()).PureComponent {
     if (wallpapersEnabled) {
       this.updateWallpaper();
     }
+    this._onHashChange = () => {
+      const hash = globalThis.location?.hash || "";
+      if (hash === "#customize" || hash === "#customize-topics") {
+        this.openCustomizationMenu();
+        if (hash === "#customize-topics") {
+          this.toggleSectionsMgmtPanel();
+        }
+      }
+    };
+    this._onHashChange();
+    globalThis.addEventListener("hashchange", this._onHashChange);
   }
   componentDidUpdate(prevProps) {
     this.applyBodyClasses();
@@ -16207,6 +15803,9 @@ class BaseContent extends (external_React_default()).PureComponent {
     __webpack_require__.g.removeEventListener("keydown", this.handleOnKeyDown);
     if (this._onVisibilityChange) {
       this.props.document.removeEventListener(Base_VISIBILITY_CHANGE_EVENT, this._onVisibilityChange);
+    }
+    if (this._onHashChange) {
+      globalThis.removeEventListener("hashchange", this._onHashChange);
     }
   }
   onWindowScroll() {
@@ -16363,11 +15962,13 @@ class BaseContent extends (external_React_default()).PureComponent {
     let url = "";
     let color = "transparent";
     let newTheme = colorMode;
+    let backgroundPosition = "center";
 
     // if no selected wallpaper fallback to browser/theme styles
     if (!selectedWallpaper) {
       __webpack_require__.g.document?.body.style.removeProperty("--newtab-wallpaper");
       __webpack_require__.g.document?.body.style.removeProperty("--newtab-wallpaper-color");
+      __webpack_require__.g.document?.body.style.removeProperty("--newtab-wallpaper-backgroundPosition");
       __webpack_require__.g.document?.body.classList.remove("lightWallpaper", "darkWallpaper");
       return;
     }
@@ -16376,6 +15977,8 @@ class BaseContent extends (external_React_default()).PureComponent {
     if (selectedWallpaper === "custom" && uploadedWallpaperUrl) {
       url = uploadedWallpaperUrl;
       color = "transparent";
+      // Note: There is no method to set a specific background position for custom wallpapers
+      backgroundPosition = "center";
       newTheme = uploadedWallpaperTheme || colorMode;
     } else if (wallpaperList) {
       const wallpaper = wallpaperList.find(wp => wp.title === selectedWallpaper);
@@ -16390,6 +15993,7 @@ class BaseContent extends (external_React_default()).PureComponent {
         // standard wallpaper & solid colors
       } else if (selectedWallpaper) {
         url = wallpaper?.wallpaperUrl || "";
+        backgroundPosition = wallpaper?.background_position || "center";
         color = wallpaper?.solid_color || "transparent";
         newTheme = wallpaper?.theme || colorMode;
         // if a solid color, determine if dark or light
@@ -16401,6 +16005,7 @@ class BaseContent extends (external_React_default()).PureComponent {
       }
     }
     __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper", `url(${url})`);
+    __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper-backgroundPosition", backgroundPosition);
     __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper-color", color || "transparent");
     __webpack_require__.g.document?.body.classList.remove("lightWallpaper", "darkWallpaper");
     __webpack_require__.g.document?.body.classList.add(newTheme === "dark" ? "darkWallpaper" : "lightWallpaper");
@@ -16446,6 +16051,11 @@ class BaseContent extends (external_React_default()).PureComponent {
   }
   isWallpaperColorDark([r, g, b]) {
     return 0.2125 * r + 0.7154 * g + 0.0721 * b <= 110;
+  }
+  toggleSectionsMgmtPanel() {
+    this.setState(prevState => ({
+      showSectionsMgmtPanel: !prevState.showSectionsMgmtPanel
+    }));
   }
   shouldDisplayTopicSelectionModal() {
     const prefs = this.props.Prefs.values;
@@ -16502,8 +16112,7 @@ class BaseContent extends (external_React_default()).PureComponent {
       pocketEnabled: prefs["feeds.section.topstories"],
       showInferredPersonalizationEnabled: prefs[Base_PREF_INFERRED_PERSONALIZATION_USER],
       topSitesRowsCount: prefs.topSitesRows,
-      weatherEnabled: prefs.showWeather,
-      trendingSearchEnabled: prefs["trendingSearch.enabled"]
+      weatherEnabled: prefs.showWeather
     };
     const pocketRegion = prefs["feeds.system.topstories"];
     const mayHaveInferredPersonalization = prefs[PREF_INFERRED_PERSONALIZATION_SYSTEM];
@@ -16528,12 +16137,8 @@ class BaseContent extends (external_React_default()).PureComponent {
     const enabledWidgets = {
       listsEnabled: prefs["widgets.lists.enabled"],
       timerEnabled: prefs["widgets.focusTimer.enabled"],
-      trendingSearchEnabled: prefs["trendingSearch.enabled"],
       weatherEnabled: prefs.showWeather
     };
-
-    // Trending Searches experiment pref check
-    const mayHaveTrendingSearch = prefs["system.trendingSearch.enabled"] && prefs["trendingSearch.defaultSearchEngine"].toLowerCase() === "google";
 
     // Mobile Download Promo Pref Checks
     const mobileDownloadPromoEnabled = prefs["mobileDownloadModal.enabled"];
@@ -16542,8 +16147,6 @@ class BaseContent extends (external_React_default()).PureComponent {
     const mobileDownloadPromoVariantCEnabled = prefs["mobileDownloadModal.variant-c"];
     const mobileDownloadPromoVariantABorC = mobileDownloadPromoVariantAEnabled || mobileDownloadPromoVariantBEnabled || mobileDownloadPromoVariantCEnabled;
     const mobileDownloadPromoWrapperHeightModifier = prefs["weather.display"] === "detailed" && weatherEnabled && shouldDisplayWeather && mayHaveWeather ? "is-tall" : "";
-    const hasThumbsUpDownLayout = prefs["discoverystream.thumbsUpDown.searchTopsitesCompact"];
-    const hasThumbsUpDown = prefs["discoverystream.thumbsUpDown.enabled"];
     const sectionsEnabled = prefs["discoverystream.sections.enabled"];
     const topicLabelsEnabled = prefs["discoverystream.topicLabels.enabled"];
     const sectionsCustomizeMenuPanelEnabled = prefs["discoverystream.sections.customizeMenuPanel.enabled"];
@@ -16559,7 +16162,7 @@ class BaseContent extends (external_React_default()).PureComponent {
     // layoutsVariantAEnabled ? "layout-variant-a" : "", // Layout experiment variant A
     // layoutsVariantBEnabled ? "layout-variant-b" : "", // Layout experiment variant B
     pocketEnabled ? "has-recommended-stories" : "no-recommended-stories", sectionsEnabled ? "has-sections-grid" : ""].filter(v => v).join(" ");
-    const outerClassName = ["outer-wrapper", isDiscoveryStream && pocketEnabled && "ds-outer-wrapper-search-alignment", isDiscoveryStream && "ds-outer-wrapper-breakpoint-override", prefs.showSearch && this.state.fixedSearch && !noSectionsEnabled && "fixed-search", prefs.showSearch && noSectionsEnabled && "only-search", prefs["feeds.topsites"] && !pocketEnabled && !prefs.showSearch && "only-topsites", noSectionsEnabled && "no-sections", prefs["logowordmark.alwaysVisible"] && "visible-logo", hasThumbsUpDownLayout && hasThumbsUpDown && "thumbs-ui-compact"].filter(v => v).join(" ");
+    const outerClassName = ["outer-wrapper", isDiscoveryStream && pocketEnabled && "ds-outer-wrapper-search-alignment", isDiscoveryStream && "ds-outer-wrapper-breakpoint-override", prefs.showSearch && this.state.fixedSearch && !noSectionsEnabled && "fixed-search", prefs.showSearch && noSectionsEnabled && "only-search", prefs["feeds.topsites"] && !pocketEnabled && !prefs.showSearch && "only-topsites", noSectionsEnabled && "no-sections", prefs["logowordmark.alwaysVisible"] && "visible-logo"].filter(v => v).join(" ");
 
     // If state.showDownloadHighlightOverride has value, let it override the logic
     // Otherwise, defer to OMC message display logic
@@ -16618,11 +16221,12 @@ class BaseContent extends (external_React_default()).PureComponent {
       mayHaveTopicSections: mayHavePersonalizedTopicSections,
       mayHaveInferredPersonalization: mayHaveInferredPersonalization,
       mayHaveWeather: mayHaveWeather,
-      mayHaveTrendingSearch: mayHaveTrendingSearch,
       mayHaveWidgets: mayHaveWidgets,
       mayHaveTimerWidget: mayHaveTimerWidget,
       mayHaveListsWidget: mayHaveListsWidget,
-      showing: customizeMenuVisible
+      showing: customizeMenuVisible,
+      toggleSectionsMgmtPanel: this.toggleSectionsMgmtPanel,
+      showSectionsMgmtPanel: this.state.showSectionsMgmtPanel
     }), this.shouldShowOMCHighlight("CustomWallpaperHighlight") && /*#__PURE__*/external_React_default().createElement(MessageWrapper, {
       dispatch: this.props.dispatch
     }, /*#__PURE__*/external_React_default().createElement(WallpaperFeatureHighlight, {

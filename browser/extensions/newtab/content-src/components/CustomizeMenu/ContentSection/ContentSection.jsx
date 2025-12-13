@@ -28,7 +28,7 @@ export class ContentSection extends React.PureComponent {
   }
 
   onPreferenceSelect(e) {
-    // eventSource: WEATHER | TOP_SITES | TOP_STORIES | WIDGET_LISTS | WIDGET_TIMER | TRENDING_SEARCH
+    // eventSource: WEATHER | TOP_SITES | TOP_STORIES | WIDGET_LISTS | WIDGET_TIMER
     const { preference, eventSource } = e.target.dataset;
     let value;
     if (e.target.nodeName === "SELECT") {
@@ -98,7 +98,6 @@ export class ContentSection extends React.PureComponent {
       pocketRegion,
       mayHaveInferredPersonalization,
       mayHaveWeather,
-      mayHaveTrendingSearch,
       mayHaveWidgets,
       mayHaveTimerWidget,
       mayHaveListsWidget,
@@ -108,12 +107,14 @@ export class ContentSection extends React.PureComponent {
       setPref,
       mayHaveTopicSections,
       exitEventFired,
+      onSubpanelToggle,
+      toggleSectionsMgmtPanel,
+      showSectionsMgmtPanel,
     } = this.props;
     const {
       topSitesEnabled,
       pocketEnabled,
       weatherEnabled,
-      trendingSearchEnabled,
       showInferredPersonalizationEnabled,
       topSitesRowsCount,
     } = enabledSections;
@@ -128,6 +129,7 @@ export class ContentSection extends React.PureComponent {
                 setPref={setPref}
                 activeWallpaper={activeWallpaper}
                 exitEventFired={exitEventFired}
+                onSubpanelToggle={onSubpanelToggle}
               />
             </div>
             {/* If widgets section is visible, hide this divider */}
@@ -183,20 +185,6 @@ export class ContentSection extends React.PureComponent {
                   />
                 </div>
               )}
-
-              {/* Trending Search */}
-              {mayHaveTrendingSearch && (
-                <div id="trending-search-section" className="section">
-                  <moz-toggle
-                    id="trending-search-toggle"
-                    pressed={trendingSearchEnabled || null}
-                    onToggle={this.onPreferenceSelect}
-                    data-preference="trendingSearch.enabled"
-                    data-eventSource="TRENDING_SEARCH"
-                    data-l10n-id="newtab-custom-widget-trending-search-toggle"
-                  />
-                </div>
-              )}
               <span className="divider" role="separator"></span>
             </div>
           </div>
@@ -212,20 +200,6 @@ export class ContentSection extends React.PureComponent {
                 data-preference="showWeather"
                 data-eventSource="WEATHER"
                 data-l10n-id="newtab-custom-weather-toggle"
-              />
-            </div>
-          )}
-
-          {/* Note: If widgets are enabled, the trending search toggle will be moved under Widgets subsection */}
-          {!mayHaveWidgets && mayHaveTrendingSearch && (
-            <div id="trending-search-section" className="section">
-              <moz-toggle
-                id="trending-search-toggle"
-                pressed={trendingSearchEnabled || null}
-                onToggle={this.onPreferenceSelect}
-                data-preference="trendingSearch.enabled"
-                data-eventSource="TRENDING_SEARCH"
-                data-l10n-id="newtab-custom-trending-search-toggle"
               />
             </div>
           )}
@@ -330,6 +304,9 @@ export class ContentSection extends React.PureComponent {
                           <SectionsMgmtPanel
                             exitEventFired={exitEventFired}
                             pocketEnabled={pocketEnabled}
+                            onSubpanelToggle={onSubpanelToggle}
+                            togglePanel={toggleSectionsMgmtPanel}
+                            showPanel={showSectionsMgmtPanel}
                           />
                         )}
                       </div>

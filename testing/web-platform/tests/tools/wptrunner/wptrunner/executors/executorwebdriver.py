@@ -784,16 +784,15 @@ class WebDriverTestDriverProtocolPart(TestDriverProtocolPart):
             obj["message"] = str(message)
         return f"window.postMessage({json.dumps(obj)}, '*');"
 
-
     def _switch_to_frame(self, index_or_elem):
         try:
-            self.webdriver.switch_frame(index_or_elem)
+            self.webdriver.switch_to_frame(index_or_elem)
         except (webdriver_error.StaleElementReferenceException,
                 webdriver_error.NoSuchFrameException) as e:
             raise ValueError from e
 
     def _switch_to_parent_frame(self):
-        self.webdriver.switch_frame("parent")
+        self.webdriver.switch_to_parent_frame()
 
 
 class WebDriverGenerateTestReportProtocolPart(GenerateTestReportProtocolPart):

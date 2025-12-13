@@ -24,6 +24,8 @@ ChromeUtils.defineESModuleGetters(this, {
   ProfileAge: "resource://gre/modules/ProfileAge.sys.mjs",
   QueryCache: "resource:///modules/asrouter/ASRouterTargeting.sys.mjs",
   Region: "resource://gre/modules/Region.sys.mjs",
+  SelectableProfileService:
+    "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   ShellService: "moz-src:///browser/components/shell/ShellService.sys.mjs",
   sinon: "resource://testing-common/Sinon.sys.mjs",
   Spotlight: "resource:///modules/asrouter/Spotlight.sys.mjs",
@@ -2374,6 +2376,63 @@ add_task(async function check_profileGroupIdTargeting() {
   );
 });
 
+add_task(async function check_currentProfileIdTargeting() {
+  is(
+    typeof ASRouterTargeting.Environment.currentProfileId,
+    "string",
+    "Should return a string"
+  );
+
+  const message = {
+    id: "foo",
+    targeting: `currentProfileId == "test-profile-id"`,
+  };
+
+  const result = await ASRouterTargeting.findMatchingMessage({
+    messages: [message],
+    context: { currentProfileId: "test-profile-id" },
+  });
+
+  is(result, message, "should select correct item by profile id");
+});
+
+add_task(async function check_profileGroupProfileCountTargeting() {
+  await pushPrefs(
+    ["browser.profiles.enabled", false],
+    ["browser.profiles.created", false]
+  );
+  const resultFalse =
+    await ASRouterTargeting.Environment.profileGroupProfileCount;
+
+  is(typeof resultFalse, "number", "Should return a number");
+
+  is(resultFalse, 0, "should be zero because profiles are disabled");
+
+  await pushPrefs(
+    ["browser.profiles.enabled", true],
+    ["browser.profiles.created", true]
+  );
+
+  const expected = await SelectableProfileService.getProfileCount();
+  const resultTrue =
+    await ASRouterTargeting.Environment.profileGroupProfileCount;
+
+  is(resultTrue, expected, "it should be equal to the profile group count");
+
+  const message = {
+    id: "foo",
+    targeting: `profileGroupProfileCount == "${expected}"`,
+  };
+  is(
+    await ASRouterTargeting.findMatchingMessage({ messages: [message] }),
+    message,
+    "should select correct item by number of profiles in the group"
+  );
+
+  //Clean up the prefs
+  await SpecialPowers.popPrefEnv();
+});
+
 add_task(async function test_buildId() {
   is(
     typeof ASRouterTargeting.Environment.buildId,
@@ -2479,18 +2538,25 @@ add_task(async function check_backupArchiveEnabled() {
   const sandbox = sinon.createSandbox();
   registerCleanupFunction(() => sandbox.restore());
 
-  await pushPrefs(["browser.backup.archive.enabled", true]);
+  await pushPrefs(
+    ["browser.backup.archive.enabled", true],
+    ["browser.backup.archive.overridePlatformCheck", true]
+  );
 
   is(
     await ASRouterTargeting.Environment.backupArchiveEnabled,
     true,
     "should return true if the killswitch is not on"
   );
-
+  await SpecialPowers.popPrefEnv();
   const archiveExperiment = await NimbusTestUtils.enrollWithFeatureConfig({
     featureId: "backupService",
     value: { archiveKillswitch: true },
   });
+  await pushPrefs(
+    ["browser.backup.archive.enabled", true],
+    ["browser.backup.archive.overridePlatformCheck", false]
+  );
 
   is(
     await ASRouterTargeting.Environment.backupArchiveEnabled,
@@ -2507,12 +2573,20 @@ add_task(async function check_backupRestoreEnabled() {
   const sandbox = sinon.createSandbox();
   registerCleanupFunction(() => sandbox.restore());
 
-  await pushPrefs(["browser.backup.restore.enabled", true]);
+  await pushPrefs(
+    ["browser.backup.restore.enabled", true],
+    ["browser.backup.restore.overridePlatformCheck", true]
+  );
 
   is(
     await ASRouterTargeting.Environment.backupRestoreEnabled,
     true,
     "should return true if the killswitch is not on"
+  );
+  await SpecialPowers.popPrefEnv();
+  await pushPrefs(
+    ["browser.backup.restore.enabled", true],
+    ["browser.backup.restore.overridePlatformCheck", false]
   );
 
   const restoreExperiment = await NimbusTestUtils.enrollWithFeatureConfig({

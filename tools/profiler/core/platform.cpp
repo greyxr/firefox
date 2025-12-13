@@ -2475,7 +2475,8 @@ static void MergeStacks(
           jsFrame.kind == JS::ProfilingFrameIterator::Frame_WasmIon ||
           jsFrame.kind == JS::ProfilingFrameIterator::Frame_WasmBaseline ||
           jsFrame.kind == JS::ProfilingFrameIterator::Frame_WasmOther) {
-        aCollector.CollectWasmFrame(jsFrame.profilingCategory(), jsFrame.label);
+        aCollector.CollectWasmOrSyncJITFrame(jsFrame.profilingCategory(),
+                                             jsFrame.label, jsFrame.sourceId);
       } else if (jsFrame.kind ==
                  JS::ProfilingFrameIterator::Frame_BaselineInterpreter) {
         // Materialize a ProfilingStackFrame similar to the C++ Interpreter. We
@@ -3363,10 +3364,9 @@ static void MaybeWriteRawStartTimeValue(SpliceableJSONWriter& aWriter,
 #endif
 
 #ifdef XP_WIN
-  Maybe<uint64_t> startTimeQPC = aStartTime.RawQueryPerformanceCounterValue();
-  if (startTimeQPC)
-    aWriter.DoubleProperty("startTimeAsQueryPerformanceCounterValue",
-                           static_cast<double>(*startTimeQPC));
+  uint64_t startTimeQPC = aStartTime.RawQueryPerformanceCounterValue();
+  aWriter.DoubleProperty("startTimeAsQueryPerformanceCounterValue",
+                         static_cast<double>(startTimeQPC));
 #endif
 }
 
@@ -5647,9 +5647,22 @@ static void NotifyObservers(const char* aTopic,
     return;
   }
 
+  // Notify C++ observers through the ObserverService
   if (nsCOMPtr<nsIObserverService> os = services::GetObserverService()) {
     os->NotifyObservers(aSubject, aTopic, nullptr);
   }
+
+#if defined(GP_OS_android)
+  // In the parent process, notify the GeckoJavaSampler when the profiler is
+  // started / stopped.
+  if (XRE_IsParentProcess()) {
+    if (strcmp(aTopic, "profiler-started") == 0) {
+      java::GeckoJavaSampler::NotifyProfilerStateChanged(true);
+    } else if (strcmp(aTopic, "profiler-stopped") == 0) {
+      java::GeckoJavaSampler::NotifyProfilerStateChanged(false);
+    }
+  }
+#endif
 }
 
 [[nodiscard]] static RefPtr<GenericPromise> NotifyProfilerStarted(

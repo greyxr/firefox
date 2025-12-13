@@ -194,23 +194,25 @@ export class YelpSuggestions extends SuggestProvider {
       }
     }
 
-    let titleHighlights = lazy.UrlbarUtils.getTokenMatches(
-      queryContext.tokens,
-      title,
-      lazy.UrlbarUtils.HIGHLIGHT.TYPED
-    );
     let payload = {
       url: url.toString(),
       originalUrl: suggestion.url,
-      bottomTextL10n: { id: "firefox-suggest-yelp-bottom-text" },
+      bottomTextL10n: {
+        id: "firefox-suggest-yelp-bottom-text",
+      },
       iconBlob: suggestion.icon_blob,
     };
-    let payloadHighlights = {};
+    let highlights;
 
     if (
       lazy.UrlbarPrefs.get("yelpServiceResultDistinction") &&
       suggestion.subjectType === lazy.YelpSubjectType.SERVICE
     ) {
+      let titleHighlights = lazy.UrlbarUtils.getTokenMatches(
+        queryContext.tokens,
+        title,
+        lazy.UrlbarUtils.HIGHLIGHT.TYPED
+      );
       payload.titleL10n = {
         id: "firefox-suggest-yelp-service-title",
         args: {
@@ -220,9 +222,13 @@ export class YelpSuggestions extends SuggestProvider {
           service: titleHighlights,
         },
       };
+      // Used for the tooltip.
+      payload.title = title;
     } else {
       payload.title = title;
-      payloadHighlights.title = titleHighlights;
+      highlights = {
+        title: lazy.UrlbarUtils.HIGHLIGHT.TYPED,
+      };
     }
 
     return new lazy.UrlbarResult({
@@ -230,7 +236,7 @@ export class YelpSuggestions extends SuggestProvider {
       source: lazy.UrlbarUtils.RESULT_SOURCE.SEARCH,
       ...resultProperties,
       payload,
-      payloadHighlights,
+      highlights,
     });
   }
 

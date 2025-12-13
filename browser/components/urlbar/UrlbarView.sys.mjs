@@ -113,7 +113,7 @@ export class UrlbarView {
   }
 
   get oneOffSearchButtons() {
-    if (!this.input.isAddressbar) {
+    if (this.input.sapName != "urlbar") {
       return null;
     }
     if (!this.#oneOffSearchButtons) {
@@ -540,9 +540,7 @@ export class UrlbarView {
       return;
     }
 
-    this.#inputWidthOnLastClose = getBoundsWithoutFlushing(
-      this.input.textbox
-    ).width;
+    this.#inputWidthOnLastClose = getBoundsWithoutFlushing(this.input).width;
 
     // We exit search mode preview on close since the result previewing it is
     // implicitly unselected.
@@ -656,8 +654,7 @@ export class UrlbarView {
     if (
       this.#rows.firstElementChild &&
       this.#queryContext.searchString == this.input.value &&
-      this.#inputWidthOnLastClose ==
-        getBoundsWithoutFlushing(this.input.textbox).width
+      this.#inputWidthOnLastClose == getBoundsWithoutFlushing(this.input).width
     ) {
       // We can reuse the current rows.
       queryOptions.allowAutofill = this.#queryContext.allowAutofill;
@@ -1711,19 +1708,64 @@ export class UrlbarView {
     item._elements.set("bottom", bottom);
   }
 
-  #addRowButtons(item, result) {
-    let container = this.#createElement("div");
-    container.className = "urlbarView-row-buttons";
-    item._elements.set("buttons", container);
-    item.appendChild(container);
+  #needsNewButtons(item, oldResult, newResult) {
+    if (!oldResult) {
+      return true;
+    }
 
+    if (
+      !!this.#getResultMenuCommands(newResult) !=
+      item._buttons.has("result-menu")
+    ) {
+      return true;
+    }
+
+    if (!!oldResult.showFeedbackMenu != !!newResult.showFeedbackMenu) {
+      return true;
+    }
+
+    if (
+      oldResult.payload.buttons?.length != newResult.payload.buttons?.length ||
+      !lazy.ObjectUtils.deepEqual(
+        oldResult.payload.buttons,
+        newResult.payload.buttons
+      )
+    ) {
+      return true;
+    }
+
+    return newResult.testForceNewContent;
+  }
+
+  #updateRowButtons(item, oldResult, result) {
     for (let i = 0; i < result.payload.buttons?.length; i++) {
-      let button = result.payload.buttons[i];
       // We hold the name to each button data in payload to enable to get the
       // data from button element by the name. This name is mainly used for
       // button that has menu (Split Button).
+      let button = result.payload.buttons[i];
       button.name ??= i.toString();
-      this.#addRowButton(item, button);
+    }
+
+    if (!this.#needsNewButtons(item, oldResult, result)) {
+      return;
+    }
+
+    let container = item._elements.get("buttons");
+    if (container) {
+      container.innerHTML = "";
+    } else {
+      container = this.#createElement("div");
+      container.className = "urlbarView-row-buttons";
+      item.appendChild(container);
+      item._elements.set("buttons", container);
+    }
+
+    item._buttons.clear();
+
+    if (result.payload.buttons) {
+      for (let button of result.payload.buttons) {
+        this.#addRowButton(item, button);
+      }
     }
 
     // TODO: `buttonText` is intended only for WebExtensions. We should remove
@@ -1740,11 +1782,9 @@ export class UrlbarView {
       this.#addRowButton(item, {
         name: "result-menu",
         classList: ["urlbarView-button-menu"],
-        l10n: {
-          id: result.showFeedbackMenu
-            ? "urlbar-result-menu-button-feedback"
-            : "urlbar-result-menu-button",
-        },
+        l10n: result.showFeedbackMenu
+          ? { id: "urlbar-result-menu-button-feedback" }
+          : { id: "urlbar-result-menu-button" },
         attributes: lazy.UrlbarPrefs.get("resultMenu.keyboardAccessible")
           ? null
           : {
@@ -1862,52 +1902,94 @@ export class UrlbarView {
     return actionContainer;
   }
 
+  #needsNewContent(item, oldResult, newResult) {
+    if (!oldResult) {
+      return true;
+    }
+
+    if (
+      (oldResult.type == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC) !=
+      (newResult.type == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC)
+    ) {
+      return true;
+    }
+
+    if (
+      oldResult.type == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC &&
+      newResult.type == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC &&
+      oldResult.payload.dynamicType != newResult.payload.dynamicType
+    ) {
+      return true;
+    }
+
+    if (oldResult.isRichSuggestion != newResult.isRichSuggestion) {
+      return true;
+    }
+
+    // Reusing a non-heuristic as a heuristic is risky as it may have DOM
+    // nodes/attributes/classes that are normally not present in a heuristic
+    // result. This may happen for example when switching from a zero-prefix
+    // search not having a heuristic to a search string one.
+    if (oldResult.heuristic != newResult.heuristic) {
+      return true;
+    }
+
+    // Container switch-tab results have a more complex DOM content that is
+    // only updated correctly by another switch-tab result.
+    if (
+      oldResult.type == lazy.UrlbarUtils.RESULT_TYPE.TAB_SWITCH &&
+      newResult.type != oldResult.type &&
+      lazy.UrlbarProviderOpenTabs.isContainerUserContextId(
+        oldResult.payload.userContextId
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      newResult.providerName == lazy.UrlbarProviderQuickSuggest.name &&
+      // Check if the `RESULT_TYPE` is `DYNAMIC` because otherwise the
+      // `suggestionType` and `items` checks aren't relevant.
+      newResult.type == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC &&
+      (oldResult.payload.suggestionType != newResult.payload.suggestionType ||
+        oldResult.payload.items?.length != newResult.payload.items?.length)
+    ) {
+      return true;
+    }
+
+    if (newResult.type == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC) {
+      if (oldResult.providerName != newResult.providerName) {
+        return true;
+      }
+
+      let provider = this.#providersManager.getProvider(newResult.providerName);
+      if (
+        !lazy.ObjectUtils.deepEqual(
+          provider.getViewTemplate?.(oldResult),
+          provider.getViewTemplate?.(newResult)
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return newResult.testForceNewContent;
+  }
+
   // eslint-disable-next-line complexity
   #updateRow(item, result) {
     let oldResult = item.result;
-    let oldResultType = item.result?.type;
-    let provider = this.#providersManager.getProvider(result.providerName);
     item.result = result;
     item.removeAttribute("stale");
     item.id = getUniqueId("urlbarView-row-");
 
-    let needsNewContent =
-      oldResultType === undefined ||
-      (oldResultType == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC) !=
-        (result.type == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC) ||
-      (oldResultType == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC &&
-        result.type == lazy.UrlbarUtils.RESULT_TYPE.DYNAMIC &&
-        oldResult.payload.dynamicType != result.payload.dynamicType) ||
-      // Dynamic results that implement getViewTemplate will
-      // always need updating.
-      provider?.getViewTemplate ||
-      oldResult.isRichSuggestion != result.isRichSuggestion ||
-      !!this.#getResultMenuCommands(result) != item._buttons.has("menu") ||
-      !!oldResult.showFeedbackMenu != !!result.showFeedbackMenu ||
-      !lazy.ObjectUtils.deepEqual(
-        oldResult.payload.buttons,
-        result.payload.buttons
-      ) ||
-      // Reusing a non-heuristic as a heuristic is risky as it may have DOM
-      // nodes/attributes/classes that are normally not present in a heuristic
-      // result. This may happen for example when switching from a zero-prefix
-      // search not having a heuristic to a search string one.
-      result.heuristic != oldResult.heuristic ||
-      // Container switch-tab results have a more complex DOM content that is
-      // only updated correctly by another switch-tab result.
-      (oldResultType == lazy.UrlbarUtils.RESULT_TYPE.TAB_SWITCH &&
-        lazy.UrlbarProviderOpenTabs.isContainerUserContextId(
-          oldResult.payload.userContextId
-        ) &&
-        result.type != oldResultType) ||
-      result.testForceNewContent;
-
-    if (needsNewContent) {
+    if (this.#needsNewContent(item, oldResult, result)) {
+      // Recreate the row content except the buttons, which we'll reuse below.
+      let buttons = item._elements.get("buttons");
       while (item.lastChild) {
         item.lastChild.remove();
       }
       item._elements.clear();
-      item._buttons.clear();
       item._content = this.#createElement("span");
       item._content.className = "urlbarView-row-inner";
       item.appendChild(item._content);
@@ -1930,8 +2012,15 @@ export class UrlbarView {
       } else {
         this.#createRowContent(item, result);
       }
-      this.#addRowButtons(item, result);
+
+      if (buttons) {
+        item.appendChild(buttons);
+        item._elements.set("buttons", buttons);
+      }
     }
+
+    this.#updateRowButtons(item, oldResult, result);
+
     item._content.id = item.id + "-inner";
 
     let isFirstChild = item === this.#rows.children[0];
@@ -2021,20 +2110,31 @@ export class UrlbarView {
       title.removeAttribute("aria-label");
     }
 
-    this.#updateOverflowTooltip(title, result.title);
+    this.#updateOverflowTooltip(
+      title,
+      result.getDisplayableValueAndHighlights("title").value
+    );
 
     let tagsContainer = item._elements.get("tagsContainer");
     if (tagsContainer) {
       tagsContainer.textContent = "";
-      if (result.payload.tags && result.payload.tags.length) {
+
+      let { value: tags, highlights } = result.getDisplayableValueAndHighlights(
+        "tags",
+        {
+          tokens: this.#queryContext.tokens,
+        }
+      );
+
+      if (tags?.length) {
         tagsContainer.append(
-          ...result.payload.tags.map((tag, i) => {
+          ...tags.map((tag, i) => {
             const element = this.#createElement("span");
             element.className = "urlbarView-tag";
             lazy.UrlbarUtils.addTextContentWithHighlights(
               element,
               tag,
-              result.payloadHighlights.tags[i]
+              highlights[i]
             );
             return element;
           })
@@ -2120,7 +2220,6 @@ export class UrlbarView {
         break;
       case lazy.UrlbarUtils.RESULT_TYPE.URL:
         if (result.providerName == "UrlbarProviderClipboard") {
-          result.payload.displayUrl = "";
           actionSetter = () => {
             this.#l10nCache.setElementL10n(action, {
               id: "urlbar-result-action-visit-from-clipboard",
@@ -2142,7 +2241,12 @@ export class UrlbarView {
         }
       // fall-through
       default:
-        if (result.heuristic && !result.payload.title) {
+        if (
+          result.heuristic &&
+          result.payload.url &&
+          result.providerName != "UrlbarProviderHistoryUrlHeuristic" &&
+          !result.autofill?.noVisitAction
+        ) {
           isVisitAction = true;
         } else if (
           (result.providerName != lazy.UrlbarProviderQuickSuggest.name ||
@@ -2184,21 +2288,25 @@ export class UrlbarView {
     item.toggleAttribute("has-url", setURL);
     let url = item._elements.get("url");
     if (setURL) {
-      let displayedUrl = result.payload.displayUrl;
-      let urlHighlights = result.payloadHighlights.displayUrl || [];
+      let { value: displayedUrl, highlights } =
+        result.getDisplayableValueAndHighlights("url", {
+          tokens: this.#queryContext.tokens,
+          isURL: true,
+        });
+      this.#updateOverflowTooltip(url, displayedUrl);
+
       if (lazy.UrlbarUtils.isTextDirectionRTL(displayedUrl, this.window)) {
         // Stripping the url prefix may change the initial text directionality,
         // causing parts of it to jump to the end. To prevent that we insert a
         // LRM character in place of the prefix.
         displayedUrl = "\u200e" + displayedUrl;
-        urlHighlights = this.#offsetHighlights(urlHighlights, 1);
+        highlights = this.#offsetHighlights(highlights, 1);
       }
       lazy.UrlbarUtils.addTextContentWithHighlights(
         url,
         displayedUrl,
-        urlHighlights
+        highlights
       );
-      this.#updateOverflowTooltip(url, result.payload.displayUrl);
     } else {
       url.textContent = "";
       this.#updateOverflowTooltip(url, "");
@@ -2235,9 +2343,13 @@ export class UrlbarView {
   #setRowSelectable(item, isRowSelectable) {
     item.toggleAttribute("row-selectable", isRowSelectable);
     item._content.toggleAttribute("selectable", isRowSelectable);
+
+    // Set or remove role="option" on the inner. "option" should be set iff the
+    // row is selectable. Some providers may set a different role if the inner
+    // is not selectable, so when removing it, only do so if it's "option".
     if (isRowSelectable) {
       item._content.setAttribute("role", "option");
-    } else {
+    } else if (item._content.getAttribute("role") == "option") {
       item._content.removeAttribute("role");
     }
   }
@@ -2340,7 +2452,8 @@ export class UrlbarView {
       }
       if (update.l10n) {
         this.#l10nCache.setElementL10n(node, update.l10n);
-      } else if (update.textContent) {
+      } else if (update.hasOwnProperty("textContent")) {
+        this.#l10nCache.removeElementL10n(node);
         lazy.UrlbarUtils.addTextContentWithHighlights(
           node,
           update.textContent,
@@ -3042,10 +3155,14 @@ export class UrlbarView {
     }
 
     this.#l10nCache.removeElementL10n(titleNode);
+
+    let titleAndHighlights = result.getDisplayableValueAndHighlights("title", {
+      tokens: this.#queryContext.tokens,
+    });
     lazy.UrlbarUtils.addTextContentWithHighlights(
       titleNode,
-      result.title,
-      result.titleHighlights
+      titleAndHighlights.value,
+      titleAndHighlights.highlights
     );
   }
 
@@ -3073,9 +3190,6 @@ export class UrlbarView {
    *   The DOM node for the result's action.
    */
   #setSwitchTabActionChiclet(result, actionNode) {
-    this.#l10nCache.setElementL10n(actionNode, {
-      id: "urlbar-result-action-switch-tab",
-    });
     actionNode.classList.add("urlbarView-switchToTab");
 
     let contextualIdentityAction = actionNode.parentNode.querySelector(
@@ -3092,6 +3206,7 @@ export class UrlbarView {
       if (!contextualIdentityAction) {
         contextualIdentityAction = actionNode.cloneNode(true);
         contextualIdentityAction.classList.add("action-contextualidentity");
+        this.#l10nCache.removeElementL10n(contextualIdentityAction);
         actionNode.parentNode.insertBefore(
           contextualIdentityAction,
           actionNode
@@ -3116,6 +3231,7 @@ export class UrlbarView {
     ) {
       if (!tabGroupAction) {
         tabGroupAction = actionNode.cloneNode(true);
+        this.#l10nCache.removeElementL10n(tabGroupAction);
         actionNode.parentNode.insertBefore(tabGroupAction, actionNode);
       }
 
@@ -3123,6 +3239,10 @@ export class UrlbarView {
     } else {
       tabGroupAction?.remove();
     }
+
+    this.#l10nCache.setElementL10n(actionNode, {
+      id: "urlbar-result-action-switch-tab",
+    });
   }
 
   #addContextualIdentityToSwitchTabChiclet(result, actionNode) {
@@ -3239,7 +3359,7 @@ export class UrlbarView {
   }
 
   #enableOrDisableRowWrap() {
-    let wrap = getBoundsWithoutFlushing(this.input.textbox).width < 650;
+    let wrap = getBoundsWithoutFlushing(this.input).width < 650;
     this.#rows.toggleAttribute("wrap", wrap);
     this.oneOffSearchButtons?.container.toggleAttribute("wrap", wrap);
   }
@@ -3615,7 +3735,7 @@ export class UrlbarView {
         title.textContent =
           localSearchMode || engine
             ? this.#queryContext.searchString
-            : result.title;
+            : result.getDisplayableValueAndHighlights("title").value;
 
         // Set the restyled-search attribute so the action text and title
         // separator are shown or hidden via CSS as appropriate.

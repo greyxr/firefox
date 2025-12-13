@@ -1063,8 +1063,8 @@ html {
   --single-select-hover-color: light-dark(#DEDEDF, #52525E);
   --picker-background-color: color-mix(in srgb, transparent 98%, light-dark(black, white) 2%);
   --picker-hover-background-color: color-mix(in srgb, transparent 95%, light-dark(black, white) 5%);
-  --picker-border-color: var(--in-content-border-color);
-  --picker-checked-border-color: var(--color-accent-primary-selected);
+  --picker-border-color: var(--border-color);
+  --picker-checked-border-color: var(--border-color-selected);
   --picker-hover-border-color: var(--picker-border-color);
   --picker-focus-ring-color: var(--color-accent-primary-selected);
   --picker-checkbox-color: var(--color-accent-primary-selected);
@@ -1121,6 +1121,12 @@ html {
 }
 .onboardingContainer:dir(rtl) {
   transform: rotateY(180deg);
+}
+.onboardingContainer:has([pos=split][fullscreen]) {
+  min-height: 100vh;
+  height: auto;
+  display: flex;
+  flex-direction: column;
 }
 .onboardingContainer .section-main {
   display: flex;
@@ -1377,8 +1383,8 @@ html {
 }
 .onboardingContainer .screen[pos=center].addons-picker .addon-container {
   display: flex;
-  border: 1px solid var(--in-content-border-color);
-  box-shadow: 0 1px 2px 0 var(--in-content-border-color);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px 0 var(--border-color);
   border-radius: var(--border-radius-small);
   margin: 5px auto;
   text-align: start;
@@ -1885,14 +1891,23 @@ html {
   margin: auto;
   margin-inline-start: 0;
 }
+.onboardingContainer .screen[pos=split][fullscreen] {
+  min-height: 100vh;
+}
 .onboardingContainer .screen[pos=split][fullscreen] .section-secondary,
 .onboardingContainer .screen[pos=split][fullscreen] .section-main {
   width: 50%;
-  height: 100%;
+  height: auto;
+}
+.onboardingContainer .screen[pos=split][fullscreen] .section-main {
+  margin: 0;
+  display: flex;
 }
 .onboardingContainer .screen[pos=split][fullscreen] .section-main .main-content {
   border-radius: 0;
   padding: 0;
+  flex: 1;
+  height: auto;
 }
 .onboardingContainer .screen[pos=split][fullscreen] .section-main .main-content h1 {
   width: auto;
@@ -1902,6 +1917,7 @@ html {
   flex-grow: 0;
   padding-inline: 110px;
   margin-block: auto;
+  padding-block: 40px;
 }
 @media only screen and (width <= 800px) {
   .onboardingContainer .screen[pos=split][fullscreen] .section-main .main-content .main-content-inner {
@@ -1961,8 +1977,8 @@ html {
 .onboardingContainer .screen[pos=split][fullscreen] .addons-picker-container .addon-container {
   display: flex;
   flex-direction: row;
-  border: 1px solid var(--in-content-border-color);
-  box-shadow: 0 1px 2px 0 var(--in-content-border-color);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px 0 var(--border-color);
   border-radius: var(--border-radius-small);
   margin-block: 0 16px;
   text-align: start;
@@ -2072,12 +2088,18 @@ html {
   margin: auto;
 }
 @media only screen and (width <= 800px) {
+  .onboardingContainer .screen[pos=split][fullscreen] {
+    height: 100%;
+  }
   .onboardingContainer .screen[pos=split][fullscreen] .section-main,
   .onboardingContainer .screen[pos=split][fullscreen] .section-secondary {
     width: 100%;
   }
   .onboardingContainer .screen[pos=split][fullscreen] .section-main {
     height: 75%;
+    flex-grow: 1;
+    margin: 0;
+    display: flex;
   }
   .onboardingContainer .screen[pos=split][fullscreen] .section-main[hide-secondary-section=responsive] {
     height: 100%;
@@ -2085,6 +2107,7 @@ html {
   .onboardingContainer .screen[pos=split][fullscreen] .section-main[hide-secondary-section=responsive] .main-content {
     border-radius: 0;
     padding: 0;
+    height: auto;
   }
   .onboardingContainer .screen[pos=split][fullscreen] .section-main .main-content .action-buttons .secondary-cta {
     inset-block-end: 0;
@@ -2096,6 +2119,7 @@ html {
   }
   .onboardingContainer .screen[pos=split][fullscreen] .section-secondary {
     --mr-secondary-position: center var(--mr-secondary-background-position-y) / 50%;
+    height: 250px;
   }
   .onboardingContainer .screen[pos=split][fullscreen] .section-secondary .hero-image img {
     width: 25%;
@@ -2108,6 +2132,9 @@ html {
 }
 [narrow] .onboardingContainer .screen[pos=split][fullscreen] .section-main {
   height: 75%;
+  flex-grow: 1;
+  margin: 0;
+  display: flex;
 }
 [narrow] .onboardingContainer .screen[pos=split][fullscreen] .section-main[hide-secondary-section=responsive] {
   height: 100%;
@@ -2115,6 +2142,7 @@ html {
 [narrow] .onboardingContainer .screen[pos=split][fullscreen] .section-main[hide-secondary-section=responsive] .main-content {
   border-radius: 0;
   padding: 0;
+  height: auto;
 }
 [narrow] .onboardingContainer .screen[pos=split][fullscreen] .section-main .main-content .action-buttons .secondary-cta {
   inset-block-end: 0;
@@ -2126,6 +2154,7 @@ html {
 }
 [narrow] .onboardingContainer .screen[pos=split][fullscreen] .section-secondary {
   --mr-secondary-position: center var(--mr-secondary-background-position-y) / 50%;
+  height: 250px;
 }
 [narrow] .onboardingContainer .screen[pos=split][fullscreen] .section-secondary .hero-image img {
   width: 25%;
@@ -2511,7 +2540,7 @@ html {
   }
 }
 @media only screen and (height <= 650px) and (width <= 620px) {
-  .onboardingContainer .screen[pos=split] .section-main .secondary-buttons-top-container {
+  .onboardingContainer .screen[pos=split]:where(:not([fullscreen])) .section-main .secondary-buttons-top-container {
     position: absolute;
     padding: 0;
     top: 0;
@@ -2519,7 +2548,7 @@ html {
   }
 }
 @media only screen and (height <= 650px) and (width <= 620px) {
-  [narrow] .onboardingContainer .screen[pos=split] .section-main .secondary-buttons-top-container {
+  [narrow] .onboardingContainer .screen[pos=split]:where(:not([fullscreen])) .section-main .secondary-buttons-top-container {
     position: absolute;
     padding: 0;
     top: 0;
@@ -2825,7 +2854,7 @@ html {
   padding-top: 0;
 }
 .onboardingContainer .tiles-single-select-section .select-item.backup:has(.selected) {
-  border: 1px solid var(--color-accent-primary);
+  border: 1px solid var(--border-color-selected);
 }
 .onboardingContainer .tiles-single-select-section .select-item.backup:hover {
   background-color: transparent;
@@ -2950,6 +2979,7 @@ html {
 }
 .onboardingContainer .confirmation-checklist-section .confirmation-checklist-container .confirmation-checklist-icon-wrapper {
   display: flex;
+  align-items: center;
 }
 .onboardingContainer .confirmation-checklist-section .confirmation-checklist-container .confirmation-checklist-text {
   margin-inline-start: 8px;
@@ -3034,7 +3064,7 @@ html {
   .onboardingContainer #content-tiles-container button.tile-header,
   .onboardingContainer button.content-tiles-header {
     background-color: var(--background-color-canvas);
-    border-color: var(--in-content-border-color);
+    border-color: var(--border-color);
   }
 }
 .onboardingContainer #content-tiles-container button.tile-header .arrow-icon,
@@ -3095,7 +3125,7 @@ html {
   border-end-end-radius: 0;
 }
 .onboardingContainer #content-tiles-container .content-tile.has-header:not(:has(+ .content-tile.has-header)) button.tile-header[aria-expanded=true] + .tile-content {
-  border: 1px solid var(--in-content-border-color);
+  border: 1px solid var(--border-color);
   border-top: none;
   border-radius: 0 0 var(--tiles-container-border-radius) var(--tiles-container-border-radius);
 }
@@ -3107,8 +3137,8 @@ html {
   justify-content: space-between;
 }
 .onboardingContainer #content-tiles-container .content-tile button.tile-header + .tile-content {
-  border-inline-start: 1px solid var(--in-content-border-color);
-  border-inline-end: 1px solid var(--in-content-border-color);
+  border-inline-start: 1px solid var(--border-color);
+  border-inline-end: 1px solid var(--border-color);
 }
 .onboardingContainer #content-tiles-container .content-tile button.tile-header .header-text-container {
   display: flex;
@@ -3282,6 +3312,7 @@ html {
   inset-inline-end: 10px;
   width: auto;
   height: auto;
+  z-index: 2;
 }
 .onboardingContainer .secondary-buttons-top-container .secondary-cta.top {
   position: relative;

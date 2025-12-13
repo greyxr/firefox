@@ -15,9 +15,12 @@ kind-dependencies:
     - generate-baseline-profile-firebase
 
 task-defaults:
+    run-on-repo-type: [hg]
     fetches:
         toolchain:
             - linux64-android-sdk-linux-repack
+            - linux64-embedded-uniffi-bindgen
+            - linux64-nimbus-fml
             - linux64-jdk-repack
             - linux64-node
     run-on-projects: []

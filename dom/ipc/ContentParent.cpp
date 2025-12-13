@@ -137,6 +137,7 @@
 #include "mozilla/hal_sandbox/PHalParent.h"
 #include "mozilla/intl/L10nRegistry.h"
 #include "mozilla/intl/LocaleService.h"
+#include "mozilla/intl/OSPreferences.h"
 #include "mozilla/ipc/BackgroundChild.h"
 #include "mozilla/ipc/BackgroundParent.h"
 #include "mozilla/ipc/ByteBuf.h"
@@ -1437,6 +1438,8 @@ already_AddRefed<RemoteBrowser> ContentParent::CreateBrowser(
     return nullptr;
   }
 
+  windowParent->Init();
+
   // Tell the content process to set up its PBrowserChild.
   bool ok = constructorSender->SendConstructBrowser(
       std::move(childEp), std::move(windowEp), tabId,
@@ -1450,8 +1453,6 @@ already_AddRefed<RemoteBrowser> ContentParent::CreateBrowser(
   // Ensure that we're marked as the current BrowserParent on our
   // CanonicalBrowsingContext.
   aBrowsingContext->Canonical()->SetCurrentBrowserParent(browserParent);
-
-  windowParent->Init();
 
   RefPtr<BrowserHost> browserHost = new BrowserHost(browserParent);
   browserParent->SetOwnerElement(aFrameElement);
@@ -2710,6 +2711,8 @@ bool ContentParent::InitInternal(ProcessPriority aInitialPriority) {
   MOZ_ASSERT(spellChecker, "No spell checker?");
 
   spellChecker->GetDictionaryList(&xpcomInit.dictionaries());
+
+  OSPreferences::GetInstance()->GetSystemLocales(xpcomInit.sysLocales());
 
   LocaleService::GetInstance()->GetAppLocalesAsBCP47(xpcomInit.appLocales());
   LocaleService::GetInstance()->GetRequestedLocales(
@@ -5163,10 +5166,13 @@ mozilla::ipc::IPCResult ContentParent::CommonCreateWindow(
   openInfo->mIsForPrinting = aForPrinting;
   openInfo->mIsForWindowDotPrint = aForWindowDotPrint;
   openInfo->mNextRemoteBrowser = aNextRemoteBrowser;
-  openInfo->mOriginAttributes = aOriginAttributes;
   openInfo->mIsTopLevelCreatedByWebContent = aIsTopLevelCreatedByWebContent;
   openInfo->mHasValidUserGestureActivation = aUserActivation;
   openInfo->mTextDirectiveUserActivation = aTextDirectiveUserActivation;
+  openInfo->mPrincipalToInheritForAboutBlank = aTriggeringPrincipal;
+  MOZ_ASSERT(
+      aOriginAttributes == openInfo->GetOriginAttributes(),
+      "Open window info gets the expected origin attributes from principal");
 
   MOZ_ASSERT_IF(aForWindowDotPrint, aForPrinting);
 
@@ -7909,21 +7915,14 @@ void ContentParent::StartRemoteWorkerService() {
 }
 
 IPCResult ContentParent::RecvRawMessage(
-    const JSActorMessageMeta& aMeta, const UniquePtr<ClonedMessageData>& aData,
+    const JSActorMessageMeta& aMeta, JSIPCValue&& aData,
     const UniquePtr<ClonedMessageData>& aStack) {
-  UniquePtr<StructuredCloneData> data;
-  if (aData) {
-    data = MakeUnique<StructuredCloneData>();
-    data->BorrowFromClonedMessageData(*aData);
-  }
   UniquePtr<StructuredCloneData> stack;
   if (aStack) {
     stack = MakeUnique<StructuredCloneData>();
     stack->BorrowFromClonedMessageData(*aStack);
   }
-  MMPrinter::Print("ContentParent::RecvRawMessage", aMeta.actorName(),
-                   aMeta.messageName(), aData);
-  ReceiveRawMessage(aMeta, std::move(data), std::move(stack));
+  ReceiveRawMessage(aMeta, std::move(aData), std::move(stack));
   return IPC_OK();
 }
 

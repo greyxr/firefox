@@ -60,8 +60,8 @@ HTMLEditor::InsertParagraphSeparatorAsSubAction(const Element& aEditingHost) {
   }
 
   {
-    Result<EditActionResult, nsresult> result = CanHandleHTMLEditSubAction(
-        CheckSelectionInReplacedElement::OnlyWhenNotInSameNode);
+    Result<EditActionResult, nsresult> result =
+        CanHandleHTMLEditSubAction(CheckSelectionInReplacedElement::No);
     if (MOZ_UNLIKELY(result.isErr())) {
       NS_WARNING("HTMLEditor::CanHandleHTMLEditSubAction() failed");
       return result;
@@ -150,20 +150,15 @@ HTMLEditor::AutoInsertParagraphHandler::Run() {
   if (NS_WARN_IF(!pointToInsert.IsInContentNode())) {
     return Err(NS_ERROR_FAILURE);
   }
-  while (true) {
-    Element* element = pointToInsert.GetContainerOrContainerParentElement();
-    if (MOZ_UNLIKELY(!element)) {
-      return Err(NS_ERROR_FAILURE);
-    }
-    // If the element can have a <br> element (it means that the element or its
-    // container must be able to have <div> or <p> too), we can handle
-    // insertParagraph at the point.
-    if (HTMLEditUtils::CanNodeContain(*element, *nsGkAtoms::br)) {
-      break;
-    }
-    // Otherwise, try to insert paragraph at the parent.
-    pointToInsert = pointToInsert.ParentPoint();
+  // If the element can have a <br> element (it means that the element or its
+  // container must be able to have <div> or <p> too), we can handle
+  // insertParagraph at the point.
+  pointToInsert = HTMLEditUtils::GetPossiblePointToInsert(
+      pointToInsert, *nsGkAtoms::br, mEditingHost);
+  if (NS_WARN_IF(!pointToInsert.IsSet())) {
+    return Err(NS_ERROR_FAILURE);
   }
+  MOZ_ASSERT(pointToInsert.IsInContentNode());
 
   if (mHTMLEditor.IsMailEditor()) {
     if (const RefPtr<Element> mailCiteElement =
@@ -1146,7 +1141,7 @@ HTMLEditor::AutoInsertParagraphHandler::HandleInHeadingElement(
   MOZ_ASSERT(rightHeadingElement,
              "SplitNodeResult::GetNextContent() should return something if "
              "DidSplit() returns true");
-  return InsertParagraphResult(rightHeadingElement,
+  return InsertParagraphResult(*rightHeadingElement,
                                splitHeadingResult.UnwrapCaretPoint());
 }
 
@@ -1877,7 +1872,7 @@ HTMLEditor::AutoInsertParagraphHandler::HandleInListItemElement(
         return moveListItemElementResult.propagateErr();
       }
       moveListItemElementResult.inspect().IgnoreCaretPointSuggestion();
-      return InsertParagraphResult(&aListItemElement,
+      return InsertParagraphResult(aListItemElement,
                                    EditorDOMPoint(&aListItemElement, 0u));
     }
 
@@ -1906,7 +1901,7 @@ HTMLEditor::AutoInsertParagraphHandler::HandleInListItemElement(
     EditorDOMPoint pointToPutCaret(
         createNewParagraphElementResult.inspect().GetNewNode(), 0u);
     return InsertParagraphResult(
-        createNewParagraphElementResult.inspect().GetNewNode(),
+        *createNewParagraphElementResult.inspect().GetNewNode(),
         std::move(pointToPutCaret));
   }
 
@@ -1979,7 +1974,7 @@ HTMLEditor::AutoInsertParagraphHandler::HandleInListItemElement(
   }
   auto* const rightListItemElement =
       splitListItemElement.GetNextContentAs<Element>();
-  return InsertParagraphResult(rightListItemElement,
+  return InsertParagraphResult(*rightListItemElement,
                                std::move(pointToPutCaret));
 }
 

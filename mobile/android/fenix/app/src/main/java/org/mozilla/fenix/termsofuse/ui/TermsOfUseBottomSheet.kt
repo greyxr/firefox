@@ -12,8 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -31,7 +34,7 @@ import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import mozilla.components.compose.base.button.FilledButton
-import mozilla.components.compose.base.button.TextButton
+import mozilla.components.compose.base.button.OutlinedButton
 import org.mozilla.fenix.R
 import org.mozilla.fenix.compose.LinkText
 import org.mozilla.fenix.compose.LinkTextState
@@ -42,6 +45,7 @@ private val sheetMaxWidth = 450.dp
 /**
  * The terms of service prompt.
  *
+ * @param showDragHandle If the user should see and be able to use a drag handle to dismiss the prompt.
  * @param onDismiss The callback to invoke when the prompt is dismissed.
  * @param onDismissRequest The callback to invoke when the user clicks outside of the bottom sheet,
  * after sheet animates to Hidden. See [ModalBottomSheet].
@@ -54,6 +58,7 @@ private val sheetMaxWidth = 450.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TermsOfUseBottomSheet(
+    showDragHandle: Boolean = true,
     onDismiss: () -> Unit,
     onDismissRequest: () -> Unit,
     onAcceptClicked: () -> Unit,
@@ -71,6 +76,7 @@ fun TermsOfUseBottomSheet(
     }
 
     BottomSheet(
+        showDragHandle = showDragHandle,
         sheetState = sheetState,
         onDismiss = onDismiss,
         onDismissRequest = onDismissRequest,
@@ -85,6 +91,7 @@ fun TermsOfUseBottomSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BottomSheet(
+    showDragHandle: Boolean,
     sheetState: SheetState,
     onDismiss: () -> Unit = {},
     onDismissRequest: () -> Unit = {},
@@ -95,12 +102,22 @@ private fun BottomSheet(
     onLearnMoreClicked: () -> Unit = {},
 ) {
     ModalBottomSheet(
-        onDismissRequest = { onDismissRequest() },
+        sheetGesturesEnabled = showDragHandle,
+        dragHandle = if (showDragHandle) {
+            { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.outline) }
+        } else {
+            null
+        },
+        onDismissRequest = onDismissRequest,
         sheetMaxWidth = sheetMaxWidth,
         sheetState = sheetState,
-        containerColor = FirefoxTheme.colors.layer2,
+        containerColor = MaterialTheme.colorScheme.surface,
+        properties = ModalBottomSheetProperties(
+            shouldDismissOnClickOutside = false,
+        ),
     ) {
         BottomSheetContent(
+            showDragHandle = showDragHandle,
             sheetState = sheetState,
             onDismiss = onDismiss,
             onAcceptClicked = onAcceptClicked,
@@ -115,6 +132,7 @@ private fun BottomSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BottomSheetContent(
+    showDragHandle: Boolean,
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onAcceptClicked: () -> Unit = {},
@@ -129,8 +147,12 @@ private fun BottomSheetContent(
     Column(
         modifier = Modifier
             .verticalScroll(scrollState)
-            .padding(horizontal = 32.dp),
+            .padding(start = 36.dp, end = 36.dp, bottom = 32.dp),
     ) {
+        if (!showDragHandle) {
+            Spacer(Modifier.size(16.dp))
+        }
+
         Image(
             painter = painterResource(id = R.drawable.ic_firefox),
             contentDescription = null,
@@ -139,17 +161,15 @@ private fun BottomSheetContent(
                 .align(Alignment.CenterHorizontally),
         )
 
-        Spacer(Modifier.size(16.dp))
+        Spacer(Modifier.size(20.dp))
 
         Text(
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally),
+            modifier = Modifier.align(Alignment.CenterHorizontally),
             text = stringResource(R.string.terms_of_use_prompt_title),
             style = FirefoxTheme.typography.headline6,
-            color = FirefoxTheme.colors.textPrimary,
         )
 
-        Spacer(Modifier.size(16.dp))
+        Spacer(Modifier.size(20.dp))
 
         BottomSheetMessage(
             onTermsOfUseClicked = onTermsOfUseClicked,
@@ -157,7 +177,20 @@ private fun BottomSheetContent(
             onLearnMoreClicked = onLearnMoreClicked,
         )
 
-        Spacer(Modifier.size(16.dp))
+        Spacer(Modifier.size(34.dp))
+
+        OutlinedButton(
+            text = stringResource(R.string.terms_of_use_prompt_postpone),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            onRemindMeLaterClicked()
+
+            coroutineScope.launch {
+                sheetState.hide()
+            }.invokeOnCompletion {
+                onDismiss()
+            }
+        }
 
         FilledButton(
             modifier = Modifier.fillMaxWidth(),
@@ -171,20 +204,6 @@ private fun BottomSheetContent(
                 onDismiss()
             }
         }
-
-        TextButton(
-            modifier = Modifier.fillMaxWidth(),
-            text = stringResource(R.string.terms_of_use_prompt_postpone),
-            onClick = {
-                onRemindMeLaterClicked()
-
-                coroutineScope.launch {
-                    sheetState.hide()
-                }.invokeOnCompletion {
-                    onDismiss()
-                }
-            },
-        )
     }
 }
 
@@ -209,6 +228,7 @@ private fun BottomSheetMessage(
         url = "",
         onClick = { onLearnMoreClicked() },
     )
+
     LinkText(
         text = stringResource(
             id = R.string.terms_of_use_prompt_message_1,
@@ -221,7 +241,7 @@ private fun BottomSheetMessage(
             privacyNoticeLinkState,
         ),
         style = FirefoxTheme.typography.body2.copy(
-            color = FirefoxTheme.colors.textSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         ),
         linkTextDecoration = TextDecoration.Underline,
     )
@@ -237,7 +257,7 @@ private fun BottomSheetMessage(
             learnMoreLinkState,
         ),
         style = FirefoxTheme.typography.body2.copy(
-            color = FirefoxTheme.colors.textSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         ),
         linkTextDecoration = TextDecoration.Underline,
     )
@@ -250,14 +270,29 @@ private fun TermsOfUseBottomSheetMobilePortraitPreview() {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     FirefoxTheme {
-        BottomSheet(sheetState = sheetState)
+        BottomSheet(
+            showDragHandle = true,
+            sheetState = sheetState,
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-/**
- * Preview copied from [androidx.compose.ui.tooling.preview.PreviewScreenSizes].
- */
+@PreviewLightDark
+@Composable
+private fun TermsOfUseBottomSheetMobilePortraitNoHandlePreview() {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    FirefoxTheme {
+        BottomSheet(
+            showDragHandle = false,
+            sheetState = sheetState,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+// Preview copied from [androidx.compose.ui.tooling.preview.PreviewScreenSizes].
 @Preview(
     name = "Phone - Landscape",
     device = "spec:width=411dp,height=891dp,orientation=landscape,dpi=420",
@@ -268,14 +303,15 @@ private fun TermsOfUseBottomSheetMobileLandscapePreview() {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     FirefoxTheme {
-        BottomSheet(sheetState = sheetState)
+        BottomSheet(
+            showDragHandle = true,
+            sheetState = sheetState,
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-/**
- * Preview copied from [androidx.compose.ui.tooling.preview.PreviewScreenSizes].
- */
+// Preview copied from [androidx.compose.ui.tooling.preview.PreviewScreenSizes].
 @Preview(
     name = "Tablet - Portrait",
     device = "spec:width=1280dp,height=800dp,dpi=240,orientation=portrait",
@@ -286,20 +322,24 @@ private fun TermsOfUseBottomSheetTabletPortraitPreview() {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     FirefoxTheme {
-        BottomSheet(sheetState = sheetState)
+        BottomSheet(
+            showDragHandle = true,
+            sheetState = sheetState,
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-/**
- * Preview copied from [androidx.compose.ui.tooling.preview.PreviewScreenSizes].
- */
+// Preview copied from [androidx.compose.ui.tooling.preview.PreviewScreenSizes].
 @Preview(name = "Tablet - Landscape", device = TABLET, showSystemUi = true)
 @Composable
 private fun TermsOfUseBottomSheetTabletLandscapePreview() {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     FirefoxTheme {
-        BottomSheet(sheetState = sheetState)
+        BottomSheet(
+            showDragHandle = true,
+            sheetState = sheetState,
+        )
     }
 }

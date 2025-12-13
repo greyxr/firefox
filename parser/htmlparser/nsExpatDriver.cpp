@@ -296,6 +296,8 @@ static const nsCatalogData kCatalogTable[] = {
      "htmlmathml-f.ent", nullptr},
     {"-//W3C//DTD MathML 2.0//EN", "htmlmathml-f.ent", nullptr},
     {"-//WAPFORUM//DTD XHTML Mobile 1.0//EN", "htmlmathml-f.ent", nullptr},
+    {"-//WAPFORUM//DTD XHTML Mobile 1.1//EN", "htmlmathml-f.ent", nullptr},
+    {"-//WAPFORUM//DTD XHTML Mobile 1.2//EN", "htmlmathml-f.ent", nullptr},
     {nullptr, nullptr, nullptr}};
 
 static const nsCatalogData* LookupCatalogData(const char16_t* aPublicID) {
@@ -355,7 +357,6 @@ static void GetLocalDTDURI(const nsCatalogData* aCatalogData, nsIURI* aDTD,
 /***************************** END CATALOG UTILS *****************************/
 
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(nsExpatDriver)
-  NS_INTERFACE_MAP_ENTRY(nsIDTD)
   NS_INTERFACE_MAP_ENTRY(nsISupports)
 NS_INTERFACE_MAP_END
 
@@ -1654,8 +1655,7 @@ nsresult nsExpatDriver::Initialize(nsIURI* aURI, nsIContentSink* aSink) {
   return mInternalState;
 }
 
-NS_IMETHODIMP
-nsExpatDriver::BuildModel(nsIContentSink* aSink) { return mInternalState; }
+nsresult nsExpatDriver::BuildModel() { return mInternalState; }
 
 void nsExpatDriver::DidBuildModel() {
   if (!mInParser) {
@@ -1669,8 +1669,7 @@ void nsExpatDriver::DidBuildModel() {
   mSink = nullptr;
 }
 
-NS_IMETHODIMP_(void)
-nsExpatDriver::Terminate() {
+void nsExpatDriver::Terminate() {
   // XXX - not sure what happens to the unparsed data.
   if (mExpatParser) {
     RLBOX_EXPAT_MCALL(MOZ_XML_StopParser, XML_FALSE);

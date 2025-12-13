@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+@file:Suppress("TooManyFunctions")
+
 package org.mozilla.fenix.compose.list
 
 import android.content.res.Configuration
@@ -22,8 +24,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,6 +31,7 @@ import androidx.compose.material3.ListItemColors
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
@@ -52,6 +53,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -60,7 +63,10 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import mozilla.components.compose.base.badge.BADGE_SIZE_SMALL
+import mozilla.components.compose.base.badge.BadgedIcon
 import mozilla.components.compose.base.modifier.thenConditional
+import mozilla.components.compose.base.theme.information
 import org.mozilla.fenix.compose.Favicon
 import org.mozilla.fenix.compose.button.RadioButton
 import org.mozilla.fenix.theme.FirefoxTheme
@@ -84,6 +90,8 @@ private val EmptyListItemSlot: @Composable RowScope.() -> Unit = {}
  * @param overline An optional text shown above the label.
  * @param description An optional description text below the label.
  * @param maxDescriptionLines An optional maximum number of lines for the description text to span.
+ * @param enabled Controls the enabled state of the list item. When `false`, the list item will not
+ * be clickable.
  * @param minHeight An optional minimum height for the list item.
  * @param onClick Called when the user clicks on the item.
  * @param onLongClick Called when the user long clicks on the item.
@@ -101,6 +109,7 @@ fun TextListItem(
     overline: String? = null,
     description: String? = null,
     maxDescriptionLines: Int = 1,
+    enabled: Boolean = true,
     minHeight: Dp = LIST_ITEM_HEIGHT,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
@@ -116,6 +125,7 @@ fun TextListItem(
         overline = overline,
         description = description,
         maxDescriptionLines = maxDescriptionLines,
+        enabled = enabled,
         minHeight = minHeight,
         onClick = onClick,
         onLongClick = onLongClick,
@@ -254,11 +264,17 @@ fun FaviconListItem(
  * @param minHeight An optional minimum height for the list item.
  * @param onClick Called when the user clicks on the item.
  * @param onLongClick Called when the user long clicks on the item.
+ * @param beforeIconTint [Color] used to tint the icon.  Note: Color.Unspecified is used when you
+ * wish to preserve the original colors of the icon.  This color should NOT be combined with
+ * ListItemColors because ListItemDefaults will not allow you to specify Color.Unspecified.
  * @param beforeIconPainter [Painter] used to display an [Icon] before the list item.
  * @param beforeIconDescription Content description of the icon.
  * @param isBeforeIconHighlighted Whether or not the item should be highlighted with a notification icon.
  * @param showDivider Whether or not to display a vertical divider line before the [IconButton]
  * at the end.
+ * @param afterIconTint [Color] used to tint the icon.  Note: Color.Unspecified is used when you
+ * wish to preserve the original colors of the icon.  This color should NOT be combined with
+ * ListItemColors because ListItemDefaults will not allow you to specify Color.Unspecified.
  * @param afterIconPainter [Painter] used to display an icon after the list item.
  * @param afterIconDescription Content description of the icon.
  * @param onAfterIconClick Called when the user clicks on the icon. An [IconButton] will be
@@ -279,10 +295,12 @@ fun IconListItem(
     minHeight: Dp = LIST_ITEM_HEIGHT,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    beforeIconTint: Color = ListItemDefaults.colors().leadingIconColor,
     beforeIconPainter: Painter,
     beforeIconDescription: String? = null,
     isBeforeIconHighlighted: Boolean = false,
     showDivider: Boolean = false,
+    afterIconTint: Color = ListItemDefaults.colors().leadingIconColor,
     afterIconPainter: Painter? = null,
     afterIconDescription: String? = null,
     onAfterIconClick: (() -> Unit)? = null,
@@ -306,7 +324,7 @@ fun IconListItem(
                 isHighlighted = isBeforeIconHighlighted,
                 painter = beforeIconPainter,
                 description = beforeIconDescription,
-                tint = if (enabled) colors.leadingIconColor else colors.disabledLeadingIconColor,
+                tint = if (enabled) beforeIconTint else colors.disabledLeadingIconColor,
             )
         },
         afterListItemAction = {
@@ -314,7 +332,7 @@ fun IconListItem(
                 enabled = enabled,
                 painter = afterIconPainter,
                 description = afterIconDescription,
-                tint = if (enabled) colors.trailingIconColor else colors.disabledTrailingIconColor,
+                tint = if (enabled) afterIconTint else colors.disabledTrailingIconColor,
                 onClick = onAfterIconClick,
                 listAction = afterListAction,
                 showDivider = showDivider,
@@ -330,20 +348,15 @@ private fun IconListItemBeforeIcon(
     description: String?,
     tint: Color,
 ) {
-    BadgedBox(
-        badge = {
-            if (isHighlighted) {
-                Badge(containerColor = FirefoxTheme.colors.actionInformation)
-            }
-        },
-    ) {
-        Icon(
-            painter = painter,
-            contentDescription = description,
-            tint = tint,
-            modifier = Modifier.size(ICON_SIZE),
-        )
-    }
+    BadgedIcon(
+        painter = painter,
+        isHighlighted = isHighlighted,
+        tint = tint,
+        size = BADGE_SIZE_SMALL,
+        contentDescription = description,
+        containerColor = MaterialTheme.colorScheme.information,
+        modifier = Modifier.size(ICON_SIZE),
+    )
 }
 
 @Composable
@@ -428,6 +441,10 @@ fun RadioButtonListItem(
             selected = selected,
             modifier = Modifier
                 .size(ICON_SIZE)
+                .semantics {
+                    testTag = "$label.radio.button"
+                    testTagsAsResourceId = true
+                }
                 .clearAndSetSemantics {},
             enabled = enabled,
             onClick = onClick,
@@ -612,10 +629,16 @@ fun SelectableFaviconListItem(
  * @param minHeight An optional minimum height for the list item.
  * @param onClick Called when the user clicks on the item.
  * @param onLongClick Called when the user long clicks on the item.
+ * @param beforeIconTint [Color] used to tint the icon.  Note: Color.Unspecified is used when you
+ * wish to preserve the original colors of the icon.  This color should NOT be combined with
+ * ListItemColors because ListItemDefaults will not allow you to specify Color.Unspecified.
  * @param beforeIconPainter [Painter] used to display an [Icon] before the list item.
  * @param beforeIconDescription Content description of the icon.
  * @param showDivider Whether or not to display a vertical divider line before the [IconButton]
  * at the end.
+ * @param afterIconTint [Color] used to tint the icon.  Note: Color.Unspecified is used when you
+ * wish to preserve the original colors of the icon.  This color should NOT be combined with
+ * ListItemColors because ListItemDefaults will not allow you to specify Color.Unspecified.
  * @param afterIconPainter [Painter] used to display an icon after the list item.
  * @param afterIconDescription Content description of the icon.
  * @param onAfterIconClick Called when the user clicks on the icon. An [IconButton] will be
@@ -624,6 +647,7 @@ fun SelectableFaviconListItem(
  * not supplied.
  */
 @Composable
+@Suppress("CognitiveComplexMethod")
 fun SelectableIconListItem(
     label: String,
     isSelected: Boolean,
@@ -637,9 +661,11 @@ fun SelectableIconListItem(
     minHeight: Dp = LIST_ITEM_HEIGHT,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    beforeIconTint: Color = ListItemDefaults.colors().leadingIconColor,
     beforeIconPainter: Painter,
     beforeIconDescription: String? = null,
     showDivider: Boolean = false,
+    afterIconTint: Color = ListItemDefaults.colors().trailingIconColor,
     afterIconPainter: Painter? = null,
     afterIconDescription: String? = null,
     onAfterIconClick: (() -> Unit)? = null,
@@ -664,7 +690,7 @@ fun SelectableIconListItem(
                     Icon(
                         painter = beforeIconPainter,
                         contentDescription = beforeIconDescription,
-                        tint = if (enabled) colors.leadingIconColor else colors.disabledLeadingIconColor,
+                        tint = if (enabled) beforeIconTint else colors.disabledLeadingIconColor,
                     )
                 },
             )
@@ -674,7 +700,7 @@ fun SelectableIconListItem(
                 return@ListItem
             }
 
-            val tint = if (enabled) colors.trailingIconColor else colors.disabledTrailingIconColor
+            val tint = if (enabled) afterIconTint else colors.disabledTrailingIconColor
 
             if (showDivider) {
                 VerticalDivider()
@@ -928,7 +954,7 @@ private fun ListItemContent(
         description?.let {
             Text(
                 text = description,
-                color = colors.supportingTextColor,
+                color = if (enabled) colors.supportingTextColor else colors.disabledHeadlineColor,
                 overflow = TextOverflow.Ellipsis,
                 maxLines = maxDescriptionLines,
                 style = FirefoxTheme.typography.body2,
@@ -945,6 +971,11 @@ private fun TextListItemPreview() {
     FirefoxTheme {
         Box(Modifier.background(MaterialTheme.colorScheme.surface)) {
             TextListItem(label = "Label only")
+
+            TextListItem(
+                label = "Label only - disabled",
+                enabled = false,
+            )
         }
     }
 }
@@ -953,11 +984,19 @@ private fun TextListItemPreview() {
 @Preview(name = "TextListItem with a description", uiMode = Configuration.UI_MODE_NIGHT_YES)
 private fun TextListItemWithDescriptionPreview() {
     FirefoxTheme {
-        Box(Modifier.background(MaterialTheme.colorScheme.surface)) {
-            TextListItem(
-                label = "Label + description",
-                description = "Description text",
-            )
+        Surface {
+            Column {
+                TextListItem(
+                    label = "Label + description",
+                    description = "Description text",
+                )
+
+                TextListItem(
+                    label = "Label + description - disabled",
+                    description = "Description text",
+                    enabled = false,
+                )
+            }
         }
     }
 }
@@ -1008,8 +1047,9 @@ private fun TextListItemWithIconPreview() {
     }
 }
 
+@Suppress("LongMethod")
 @Composable
-@Preview(name = "IconListItem", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@PreviewLightDark
 private fun IconListItemPreview() {
     FirefoxTheme {
         Column(Modifier.background(MaterialTheme.colorScheme.surface)) {
@@ -1021,11 +1061,28 @@ private fun IconListItemPreview() {
             )
 
             IconListItem(
+                label = "Left icon list item highlighted",
+                onClick = {},
+                beforeIconPainter = painterResource(iconsR.drawable.mozac_ic_folder_24),
+                beforeIconDescription = "click me",
+                isBeforeIconHighlighted = true,
+            )
+
+            IconListItem(
                 label = "Left icon list item",
                 colors = ListItemDefaults.colors(headlineColor = MaterialTheme.colorScheme.tertiary),
                 onClick = {},
                 beforeIconPainter = painterResource(iconsR.drawable.mozac_ic_folder_24),
                 beforeIconDescription = "click me",
+            )
+
+            IconListItem(
+                label = "Left icon list item highlighted",
+                colors = ListItemDefaults.colors(headlineColor = MaterialTheme.colorScheme.tertiary),
+                onClick = {},
+                beforeIconPainter = painterResource(iconsR.drawable.mozac_ic_folder_24),
+                beforeIconDescription = "click me",
+                isBeforeIconHighlighted = true,
             )
 
             IconListItem(
@@ -1039,6 +1096,17 @@ private fun IconListItemPreview() {
             )
 
             IconListItem(
+                label = "Left icon list item highlighted + right icon",
+                onClick = {},
+                beforeIconPainter = painterResource(iconsR.drawable.mozac_ic_folder_24),
+                beforeIconDescription = "click me",
+                showDivider = true,
+                afterIconPainter = painterResource(iconsR.drawable.mozac_ic_chevron_right_24),
+                afterIconDescription = null,
+                isBeforeIconHighlighted = true,
+            )
+
+            IconListItem(
                 label = "Left icon list item + right icon (disabled)",
                 enabled = false,
                 onClick = {},
@@ -1046,6 +1114,17 @@ private fun IconListItemPreview() {
                 beforeIconDescription = "click me",
                 afterIconPainter = painterResource(iconsR.drawable.mozac_ic_chevron_right_24),
                 afterIconDescription = null,
+            )
+
+            IconListItem(
+                label = "Left icon list item highlighted + right icon (disabled)",
+                enabled = false,
+                onClick = {},
+                beforeIconPainter = painterResource(iconsR.drawable.mozac_ic_folder_24),
+                beforeIconDescription = "click me",
+                afterIconPainter = painterResource(iconsR.drawable.mozac_ic_chevron_right_24),
+                afterIconDescription = null,
+                isBeforeIconHighlighted = true,
             )
 
             IconListItem(
@@ -1057,6 +1136,29 @@ private fun IconListItemPreview() {
                 beforeIconDescription = "click me",
                 afterIconPainter = painterResource(iconsR.drawable.mozac_ic_chevron_right_24),
                 afterIconDescription = null,
+            )
+
+            IconListItem(
+                label = "Colorful icon list item",
+                enabled = true,
+                onClick = {},
+                beforeIconTint = Color.Unspecified,
+                beforeIconPainter = painterResource(iconsR.drawable.mozac_ic_shield_slash_critical_24),
+                beforeIconDescription = "click me",
+                afterIconPainter = painterResource(iconsR.drawable.mozac_ic_chevron_right_24),
+                afterIconDescription = null,
+            )
+
+            IconListItem(
+                label = "Left icon list item highlighted + right icon (disabled)",
+                overline = "Overline",
+                enabled = false,
+                onClick = {},
+                beforeIconPainter = painterResource(iconsR.drawable.mozac_ic_folder_24),
+                beforeIconDescription = "click me",
+                afterIconPainter = painterResource(iconsR.drawable.mozac_ic_chevron_right_24),
+                afterIconDescription = null,
+                isBeforeIconHighlighted = true,
             )
         }
     }
@@ -1424,6 +1526,30 @@ private fun SelectableListItemPreview() {
                 afterListItemAction = {},
                 showSelectableItemAfter = true,
             )
+        }
+    }
+}
+
+@Composable
+@PreviewLightDark
+private fun IconListItemBeforeIconPreview() {
+    FirefoxTheme {
+        Surface {
+            Row(modifier = Modifier.padding(all = FirefoxTheme.layout.space.static100)) {
+                IconListItemBeforeIcon(
+                    isHighlighted = false,
+                    painter = painterResource(iconsR.drawable.mozac_ic_shield_slash_critical_24),
+                    description = "",
+                    tint = Color.Unspecified,
+                )
+
+                IconListItemBeforeIcon(
+                    isHighlighted = true,
+                    painter = painterResource(iconsR.drawable.mozac_ic_shield_slash_critical_24),
+                    description = "",
+                    tint = Color.Unspecified,
+                )
+            }
         }
     }
 }

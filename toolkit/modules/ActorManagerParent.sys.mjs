@@ -472,9 +472,6 @@ let JSWINDOWACTORS = {
     },
     child: {
       esModuleURI: "resource://gre/actors/PageExtractorChild.sys.mjs",
-      events: {
-        DOMContentLoaded: { createActor: false },
-      },
     },
     matches: [
       "http://*/*",
@@ -484,7 +481,7 @@ let JSWINDOWACTORS = {
       "data:text/html,*",
       "about:reader?*",
     ],
-    messageManagerGroups: ["browsers"],
+    messageManagerGroups: ["browsers", "headless-browsers"],
   },
 
   PopupAndRedirectBlocking: {
@@ -704,7 +701,6 @@ if (AppConstants.platform != "android") {
       esModuleURI: "resource://gre/actors/DateTimePickerChild.sys.mjs",
       events: {
         MozOpenDateTimePicker: {},
-        MozUpdateDateTimePicker: {},
         MozCloseDateTimePicker: {},
       },
     },

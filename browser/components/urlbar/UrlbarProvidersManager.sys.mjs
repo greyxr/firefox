@@ -8,8 +8,9 @@
  */
 
 /**
- * @import { UrlbarProvider, UrlbarSearchStringTokenData } from "UrlbarUtils.sys.mjs"
+ * @import { UrlbarProvider } from "UrlbarUtils.sys.mjs"
  * @import { UrlbarMuxer } from "UrlbarUtils.sys.mjs"
+ * @import { UrlbarSearchStringTokenData } from "UrlbarTokenizer.sys.mjs"
  */
 
 const lazy = {};
@@ -17,6 +18,7 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   ObjectUtils: "resource://gre/modules/ObjectUtils.sys.mjs",
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
+  Region: "resource://gre/modules/Region.sys.mjs",
   SkippableTimer: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
   UrlbarMuxer: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
@@ -425,7 +427,8 @@ export class ProvidersManager {
     }
 
     // Apply tokenization.
-    lazy.UrlbarTokenizer.tokenize(queryContext);
+    let tokens = lazy.UrlbarTokenizer.tokenize(queryContext);
+    queryContext.tokens = tokens;
 
     // If there's a single source, we are in restriction mode.
     if (queryContext.sources && queryContext.sources.length == 1) {
@@ -459,6 +462,15 @@ export class ProvidersManager {
     } catch {
       // We continue anyway, because we want the user to be able to search their
       // history and bookmarks even if search engines are not available.
+    }
+
+    // Some providers depend on Region/Locale info and must access Region.home
+    // synchronously, so we ensure Region is initialized.
+    try {
+      await lazy.Region.init();
+    } catch (ex) {
+      // We continue anyway, region will be null and providers should handle
+      // that gracefully.
     }
 
     if (query.canceled) {
@@ -755,15 +767,23 @@ export class Query {
     }
 
     // Start querying active providers.
+    /**
+     * @type {(provider: UrlbarProvider) => Promise<void>}
+     */
     let startQuery = async provider => {
       provider.logger.debug(
         `Starting query for "${this.context.searchString}"`
       );
       let addedResult = false;
-      await provider.tryMethod("startQuery", this.context, (...args) => {
-        addedResult = true;
-        this.add(...args);
-      });
+      await provider.tryMethod(
+        "startQuery",
+        this.context,
+        /** @type {Parameters<UrlbarProvider['startQuery']>[1]} */
+        (innerProvider, result) => {
+          addedResult = true;
+          this.add(innerProvider, result);
+        }
+      );
       if (!addedResult) {
         this.context.deferUserSelectionProviders.delete(provider.name);
       }

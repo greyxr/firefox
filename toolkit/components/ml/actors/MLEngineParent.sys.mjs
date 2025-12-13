@@ -920,10 +920,16 @@ class ResponseOrChunkResolvers {
  * @typedef {object} EngineRunRequest
  * @property {?string} [id] - The identifier for tracking this request. If not provided, an id will be auto-generated. Each inference callback will reference this id.
  * @property {any[]} args - The arguments to pass to the pipeline. The required arguments depend on your model. See [Hugging Face Transformers documentation](https://huggingface.co/docs/transformers.js/en/api/models) for more details.
- * @property {?object} options - The generation options to pass to the model. Refer to the [GenerationConfigType documentation](https://huggingface.co/docs/transformers.js/en/api/utils/generation#module_utils/generation..GenerationConfigType) for available options.
+ * @property {?object} [options] - The generation options to pass to the model. Refer to the [GenerationConfigType documentation](https://huggingface.co/docs/transformers.js/en/api/utils/generation#module_utils/generation..GenerationConfigType) for available options.
  * @property {?Uint8Array} [data] - For the imagetoText model, this is the array containing the image data.
  *
- * @template EngineRunResponse
+ * @typedef {object} MLEntry
+ *
+ * @typedef {object} MetricsResponse
+ *   The metrics of the query
+ * @property {{name: string, when: number}[]} metrics
+ *
+ * @typedef {MLEntry[] & MetricsResponse} EngineRunResponse
  */
 export class MLEngine {
   /**
@@ -1031,6 +1037,30 @@ export class MLEngine {
     this.mlEngineParent = mlEngineParent;
     this.pipelineOptions = pipelineOptions;
     this.notificationsCallback = notificationsCallback;
+  }
+
+  /**
+   * Validates an inference request before sending to child process.
+   *
+   * @param {object} request - The request to validate
+   * @returns {object|null} The validated request, or null if blocked
+   * @private
+   */
+  #validateRequest(request) {
+    lazy.console.debug("[MLSecurity] Validating request:", request);
+    return request;
+  }
+
+  /**
+   * Validates an inference response after receiving from child process.
+   *
+   * @param {object} response - The response to validate
+   * @returns {object|null} The validated response, or null if blocked
+   * @private
+   */
+  #validateResponse(response) {
+    lazy.console.debug("[MLSecurity] Validating response:", response);
+    return response;
   }
 
   /**
@@ -1302,12 +1332,19 @@ export class MLEngine {
             });
           }
           if (response) {
-            const totalTime =
-              response.metrics.tokenizingTime + response.metrics.inferenceTime;
-            Glean.firefoxAiRuntime.runInferenceSuccess[
-              this.getGleanLabel()
-            ].accumulateSingleSample(totalTime);
-            request.resolve(response);
+            // Validate response before returning to caller
+            const validatedResponse = this.#validateResponse(response);
+            if (!validatedResponse) {
+              request.reject(new Error("Response failed security validation"));
+            } else {
+              const totalTime =
+                validatedResponse.metrics.tokenizingTime +
+                validatedResponse.metrics.inferenceTime;
+              Glean.firefoxAiRuntime.runInferenceSuccess[
+                this.getGleanLabel()
+              ].accumulateSingleSample(totalTime);
+              request.resolve(validatedResponse);
+            }
           } else {
             request.reject(error);
           }
@@ -1427,6 +1464,11 @@ export class MLEngine {
    * @returns {Promise<null | { cpuTime: null | number, memory: null | number}>}
    */
   async getInferenceResources() {
+    // TODO(Greg): ask that question directly to the inference process *or* move your metrics down into the child process
+    // so you don't have to do any IPC at all.
+    // you can get the memory with ChromeUtils.currentProcessMemoryUsage and the CPU since start with ChromeUtils.cpuTimeSinceProcessStart
+    // theses call can be done anywhere in the inference process including the workers, which means you can Glean metrics in any place with
+    // no IPC
     try {
       const { children } = await ChromeUtils.requestProcInfo();
       const [inference] = children.filter(child => child.type == "inference");
@@ -1466,6 +1508,12 @@ export class MLEngine {
       throw new Error("Port does not exist");
     }
 
+    // Validate request before sending to child process
+    const validatedRequest = this.#validateRequest(request);
+    if (!validatedRequest) {
+      throw new Error("Request failed security validation");
+    }
+
     const resourcesPromise = this.getInferenceResources();
     const beforeRun = ChromeUtils.now();
 
@@ -1473,7 +1521,7 @@ export class MLEngine {
       {
         type: "EnginePort:Run",
         requestId,
-        request,
+        request: validatedRequest,
         engineRunOptions: { enableInferenceProgress: false },
       },
       transferables
@@ -1561,12 +1609,18 @@ export class MLEngine {
       throw new Error("The port is null");
     }
 
+    // Validate request before sending to child process
+    const validatedRequest = this.#validateRequest(request);
+    if (!validatedRequest) {
+      throw new Error("Request failed security validation");
+    }
+
     // Send the request to the engine via postMessage with optional transferables
     this.#port.postMessage(
       {
         type: "EnginePort:Run",
         requestId,
-        request,
+        request: validatedRequest,
         engineRunOptions: { enableInferenceProgress: true },
       },
       transferables

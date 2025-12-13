@@ -18,6 +18,8 @@ ChromeUtils.defineLazyGetter(lazy, "logConsole", function () {
   });
 });
 
+const BACKUP_ERROR_CODE_PREF_NAME = "browser.backup.errorCode";
+
 /**
  * A JSWindowActor that is responsible for marshalling information between
  * the BackupService singleton and any registered UI widgets that need to
@@ -32,6 +34,13 @@ export class BackupUIParent extends JSWindowActorParent {
   #bs;
 
   /**
+   * Observer for "backup-service-status-updated" notifications.
+   * We want each BackupUIParent actor instance to be notified separately and
+   * to forward the state to its child.
+   */
+  #obs;
+
+  /**
    * Create a BackupUIParent instance. If a BackupUIParent is instantiated
    * before BrowserGlue has a chance to initialize the BackupService, this
    * constructor will cause it to initialize first.
@@ -42,6 +51,13 @@ export class BackupUIParent extends JSWindowActorParent {
     // about:preferences before the service has had a chance to init itself
     // via BrowserGlue.
     this.#bs = lazy.BackupService.init();
+
+    // Define the observer function to capture our this.
+    this.#obs = (_subject, topic) => {
+      if (topic == "backup-service-status-updated") {
+        this.sendState();
+      }
+    };
   }
 
   /**
@@ -49,6 +65,7 @@ export class BackupUIParent extends JSWindowActorParent {
    */
   actorCreated() {
     this.#bs.addEventListener("BackupService:StateUpdate", this);
+    Services.obs.addObserver(this.#obs, "backup-service-status-updated");
     // Note that loadEncryptionState is an async function.
     // This function is no-op if the encryption state was already loaded.
     this.#bs.loadEncryptionState();
@@ -59,6 +76,7 @@ export class BackupUIParent extends JSWindowActorParent {
    */
   didDestroy() {
     this.#bs.removeEventListener("BackupService:StateUpdate", this);
+    Services.obs.removeObserver(this.#obs, "backup-service-status-updated");
   }
 
   /**
@@ -113,7 +131,14 @@ export class BackupUIParent extends JSWindowActorParent {
         if (parentDirPath) {
           this.#bs.setParentDirPath(parentDirPath);
         }
+
         if (password) {
+          // If the user's previously created backups were already encrypted
+          // with a password, their encryption settings are now reset to
+          // accommodate the newly supplied password.
+          if (await this.#bs.loadEncryptionState()) {
+            await this.#bs.disableEncryption();
+          }
           await this.#bs.enableEncryption(password);
           Glean.browserBackup.passwordAdded.record();
         }
@@ -130,14 +155,7 @@ export class BackupUIParent extends JSWindowActorParent {
        */
       return { success: true };
     } else if (message.name == "DisableScheduledBackups") {
-      try {
-        if (this.#bs.state.encryptionEnabled) {
-          await this.#bs.disableEncryption();
-        }
-        await this.#bs.deleteLastBackup();
-      } catch (e) {
-        // no-op so that scheduled backups can still be turned off
-      }
+      await this.#bs.cleanupBackupFiles();
       this.#bs.setScheduledBackups(false);
     } else if (message.name == "ShowFilepicker") {
       let { win, filter, existingBackupPath } = message.data;
@@ -236,11 +254,8 @@ export class BackupUIParent extends JSWindowActorParent {
         lazy.logConsole.error(`Failed to rerun encryption`, e);
         return { success: false, errorCode: e.cause || lazy.ERRORS.UNKNOWN };
       }
-      /**
-       * TODO: (Bug 1901640) after enabling encryption, recreate the backup,
-       * this time with the new password.
-       */
-      return { success: true };
+
+      return await this.#triggerCreateBackup({ reason: "encryption" });
     } else if (message.name == "ShowBackupLocation") {
       this.#bs.showBackupLocation();
     } else if (message.name == "EditBackupLocation") {
@@ -266,6 +281,12 @@ export class BackupUIParent extends JSWindowActorParent {
           e
         );
       }
+    } else if (message.name == "SetEmbeddedComponentPersistentData") {
+      this.#bs.setEmbeddedComponentPersistentData(message.data);
+    } else if (message.name == "FlushEmbeddedComponentPersistentData") {
+      this.#bs.setEmbeddedComponentPersistentData({});
+    } else if (message.name == "ErrorBarDismissed") {
+      Services.prefs.setIntPref(BACKUP_ERROR_CODE_PREF_NAME, lazy.ERRORS.NONE);
     }
 
     return null;

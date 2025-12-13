@@ -10,10 +10,10 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import mozilla.components.support.utils.ext.getPackageInfoCompat
+import mozilla.components.support.utils.ext.packageManagerCompatHelper
+import org.mozilla.fenix.Config
 import org.mozilla.fenix.android.DefaultActivityLifecycleCallbacks
 import org.mozilla.fenix.ext.settings
-import org.mozilla.fenix.nimbus.FxNimbus
 import org.mozilla.fenix.utils.Settings
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -271,14 +271,13 @@ internal class DefaultMetricsStorage(
         /**
          * Determines whether events should be tracked based on some general criteria:
          * - user has installed as a result of a campaign
-         * - tracking is still enabled through Nimbus
+         * - this is a release build
          */
         fun shouldSendGenerally(context: Context): Boolean {
-            return context.settings().adjustCampaignId.isNotEmpty() &&
-                FxNimbus.features.growthData.value().enabled
+            return context.settings().adjustCampaignId.isNotEmpty() && Config.channel.isRelease
         }
 
-        fun getInstalledTime(context: Context): Long = context.packageManager
+        fun getInstalledTime(context: Context): Long = context.packageManagerCompatHelper
             .getPackageInfoCompat(context.packageName, 0)
             .firstInstallTime
     }

@@ -73,26 +73,28 @@
     <string name="preferences_debug_settings_compose_logins" translatable="false">Enable Compose Logins</string>
     <!-- Label for enabling Homepage as a New Tab -->
     <string name="preferences_debug_settings_homepage_as_new_tab" translatable="false">Enable Homepage as a New Tab</string>
+    <!-- Label for enabling Mozilla Ads Client -->
+    <string name="preferences_debug_settings_mozilla_ads_client" translatable="false">Enable Mozilla Ads Client</string>
     <!-- Label for enabling Discover more stories -->
     <string name="preferences_debug_settings_discover_more_stories" translatable="false">Enable Discover More Stories</string>
-    <!-- Label for enabling Private Browsing Mode redesign -->
-    <string name="preferences_debug_settings_private_browsing_mode_redesign" translatable="false">Enable Private Browsing Mode redesign</string>
     <!-- Label for enabling the menu redesign -->
     <string name="preferences_debug_settings_menu_redesign" translatable="false">Enable Menu Redesign</string>
+    <!-- Label for enabling the custom tab extension -->
+    <string name="preferences_debug_settings_custom_tab_extensions" translatable="false">Enable Custom Tab Extension List</string>
+    <!-- Label for a longer description of the custom tab extensions depending on the menu redesign or composable toolbar feature -->
+    <string name="preferences_debug_settings_custom_tab_extensions_summary" translatable="false">This needs the Menu Redesign or Composable Toolbar feature enabled</string>
     <!-- Label for enabling Firefox Suggest -->
     <string name="preferences_debug_settings_fxsuggest" translatable="false">Enable Firefox Suggest</string>
     <!-- Label for enabling the composable toolbar -->
     <string name="preferences_debug_settings_composable_toolbar" translatable="false">Enable Composable Toolbar</string>
     <!-- Label for enabling the redesigned toolbar options -->
     <string name="preferences_debug_settings_toolbar_redesign" translatable="false">Enable Redesigned Toolbar Options</string>
-    <!-- Label for enabling the redesigned simple toolbar -->
-    <string name="preferences_debug_settings_simple_toolbar_customization" tools:ignore="UnusedResources" moz:removedIn="145">Enable simple toolbar customization</string>
-    <!-- Label for enabling the redesigned expanded toolbar -->
-    <string name="preferences_debug_settings_expanded_toolbar_customization" tools:ignore="UnusedResources" moz:removedIn="145">Enable expanded toolbar customization</string>
     <!-- Label for enabling the redesigned toolbar -->
     <string name="preferences_debug_settings_toolbar_customization">Enable Toolbar Customization</string>
     <!-- Label for a longer description of the redesigned toolbar depending on the composable toolbar feature -->
     <string name="preferences_debug_settings_toolbar_redesign_summary" translatable="false">This needs the Composable Toolbar feature enabled</string>
+    <!-- Label for the option of using new scroll data for animating the dynamic toolbar -->
+    <string name="preferences_debug_settings_use_scroll_data_for_dynamic_toolbar" translatable="false">Animate dynamic toolbars based on website scroll data</string>
     <!-- Label for a longer description of the redesigned toolbar depending on the redesigned toolbar options feature -->
     <string name="preferences_debug_settings_toolbar_customization_summary" translatable="false">This needs the Redesigned Toolbar Options feature enabled</string>
     <!-- Label for toggling Remote Crash Pull -->
@@ -113,6 +115,8 @@
     <string name="preferences_debug_settings_settings_search" translatable="false">Enable Settings Search</string>
     <!-- Label for enabling the DNS over HTTPS settings -->
     <string name="preferences_debug_settings_enable_doh_settings" translatable="false">Enable DNS over HTTPS settings</string>
+    <!-- Label for enabling the persistent onboarding -->
+    <string name="preferences_debug_settings_enable_persistent_onboarding" translatable="false">Show onboarding on each app cold open</string>
 
     <!-- Label for toggling the Tab Manager enhancements -->
     <string name="preferences_tab_manager_enhancements" translatable="false">Enable Tab Manager enhancements</string>
@@ -123,7 +127,9 @@
     <string name="preferences_terms_of_use_debug_timer" translatable="false">30s ToU timer enabled</string>
 
     <!-- Label for enabling LNA blocking -->
-    <string name="preferences_debug_settings_enable_lna_blocking" translatable="false">Enable LNA blocking</string>
+    <string name="preferences_debug_settings_enable_lna_blocking" translatable="false">Enable LNA request blocking</string>
+    <string name="preferences_debug_settings_enable_lna_tracker_blocking" translatable="false">Enable LNA tracker blocking</string>
+    <string name="preferences_debug_settings_enable_lna_feature" translatable="false">Enable LNA blocking feature overall (required for anything LNA)</string>
 
     <!-- Label for enabling isolated content processes in secret settings. -->
     <string name="preferences_debug_settings_isolated_process" translatable="false">Enable Isolated Content Process (requires restart)</string>
@@ -161,6 +167,9 @@
     <string name="profiler_filter_networking_explain">Preset for investigating networking bugs in Firefox</string>
     <string name="profiler_filter_debug">Debug</string>
     <string name="profiler_filter_debug_explain">Preset for debugging. High overhead, do not use for performance work but use for focusing on understanding browser behavior.</string>
+    <string name="profiler_filter_web_compat">Web Compat</string>
+    <string name="profiler_filter_web_compat_explain">Recommended preset for debugging web compatibility issues in websites, rather than tracking performance.</string>
+
     <string name="profiler_start_dialog_started">Profiler started</string>
     <string name="profiler_start_cancel">Cancel</string>
     <string name="profiler_gathering">Gathering the profile</string>
@@ -173,6 +182,8 @@
     <string name="profiler_error">Something went wrong with the profiler</string>
     <string name="profiler_io_error">Something went wrong contacting the Profiler server.</string>
     <string name="profiler_uploaded_url_to_clipboard">URL copied to clipboard successfully</string>
+    <string name="profiler_service_notification_channel_name" translatable="false">App Profiling Status</string>
+    <string name="profiler_service_description" translatable="false">App Profiling Status</string>
 
     <!-- Debug drawer "contextual feature recommendation" (CFR) tools -->
     <!-- The description of the reset CFR section in CFR Tools -->
@@ -251,19 +262,4 @@
 
     <!-- Label for enabling Relay email masks -->
     <string name="preferences_enable_relay_email_masks">Enable Relay email masks</string>
-
-    <!-- Settings Search Strings -->
-    <!-- Title of Settings Search -->
-    <string name="settings_search_title">Settings Search</string>
-    <!-- Content description (not visible, for screen readers etc.): "Clear search field button for settings search" -->
-    <string name="content_description_settings_search_clear_search">Clear Search</string>
-    <!-- Content description (not visible, for screen readers etc.): "Navigate back button for settings search" -->
-    <string name="content_description_settings_search_navigate_back">Navigate Back</string>
-    <!-- Message displayed when the search field in the Settings Search screen is empty -->
-    <string name="settings_search_empty_query_placeholder">Search for settings</string>
-    <!-- Message when error happens with Settings Search -->
-    <string name="settings_search_error_message">Error occurred.</string>
-    <!-- Message displayed when the search field is not empty but search results is empty.
-     %s will be replaced by user query in search field. -->
-    <string name="setttings_search_no_results_found_message">No results found for %s</string>
 </resources>

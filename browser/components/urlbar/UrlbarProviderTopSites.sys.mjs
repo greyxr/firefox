@@ -94,13 +94,11 @@ export class UrlbarProviderTopSites extends UrlbarProvider {
   }
 
   /**
-   * Starts querying. Extended classes should return a Promise resolved when the
-   * provider is done searching AND returning results.
+   * Starts querying.
    *
-   * @param {UrlbarQueryContext} queryContext The query context object
-   * @param {Function} addCallback Callback invoked by the provider to add a new
-   *        result. A UrlbarResult should be passed to it.
-   * @returns {Promise}
+   * @param {UrlbarQueryContext} queryContext
+   * @param {(provider: UrlbarProvider, result: UrlbarResult) => void} addCallback
+   *   Callback invoked by the provider to add a new result.
    */
   async startQuery(queryContext, addCallback) {
     // Bail if Top Sites are not enabled. We check this condition here instead
@@ -250,10 +248,7 @@ export class UrlbarProviderTopSites extends UrlbarProvider {
                 let result = new lazy.UrlbarResult({
                   type: UrlbarUtils.RESULT_TYPE.TAB_SWITCH,
                   source: UrlbarUtils.RESULT_SOURCE.TABS,
-                  ...lazy.UrlbarResult.payloadAndSimpleHighlights(
-                    queryContext.tokens,
-                    payload
-                  ),
+                  payload,
                 });
                 addCallback(this, result);
                 switchToTabResultAdded = true;
@@ -289,10 +284,7 @@ export class UrlbarProviderTopSites extends UrlbarProvider {
           let result = new lazy.UrlbarResult({
             type: UrlbarUtils.RESULT_TYPE.URL,
             source: resultSource,
-            ...lazy.UrlbarResult.payloadAndSimpleHighlights(
-              queryContext.tokens,
-              payload
-            ),
+            payload,
           });
           addCallback(this, result);
           break;
@@ -322,17 +314,14 @@ export class UrlbarProviderTopSites extends UrlbarProvider {
           let result = new lazy.UrlbarResult({
             type: UrlbarUtils.RESULT_TYPE.SEARCH,
             source: UrlbarUtils.RESULT_SOURCE.SEARCH,
-            ...lazy.UrlbarResult.payloadAndSimpleHighlights(
-              queryContext.tokens,
-              {
-                keyword: site.title,
-                providesSearchMode: true,
-                engine: engine.name,
-                query: "",
-                icon: site.favicon,
-                isPinned: site.isPinned,
-              }
-            ),
+            payload: {
+              keyword: site.title,
+              providesSearchMode: true,
+              engine: engine.name,
+              query: "",
+              icon: site.favicon,
+              isPinned: site.isPinned,
+            },
           });
           addCallback(this, result);
           break;

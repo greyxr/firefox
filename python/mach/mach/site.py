@@ -764,10 +764,10 @@ class CommandSiteManager:
         check_errors: str = "\n"  # save output when check fails
         check_result = subprocess.run(
             pip_command(python_executable=self.python_path, subcommand="check"),
+            check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            check=False,
         )
 
         if not check_result.returncode:
@@ -826,10 +826,10 @@ class CommandSiteManager:
 
         check_result = subprocess.run(
             pip_command(python_executable=self.python_path, subcommand="check"),
+            check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            check=False,
         )
 
         if check_result.returncode:
@@ -1086,6 +1086,7 @@ class PythonVirtualenv:
                     subcommand="install",
                     args=pip_install_args,
                 ),
+                check=kwargs.pop("check", True),
                 **kwargs,
             )
         except subprocess.CalledProcessError as cpe:
@@ -1383,9 +1384,9 @@ def _assert_pip_check(pthfile_lines, virtualenv_name, requirements):
         # changes recently).
         process = subprocess.run(
             [sys.executable, "-m", "venv", "--without-pip", check_env_path],
+            check=False,
             capture_output=True,
             encoding="UTF-8",
-            check=False,
         )
 
         if process.returncode != 0:
@@ -1430,10 +1431,10 @@ def _assert_pip_check(pthfile_lines, virtualenv_name, requirements):
 
         check_result = subprocess.run(
             pip + ["check"],
+            check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            check=False,
         )
         if check_result.returncode:
             subprocess.check_call(pip + ["list", "-v"], stdout=sys.stderr)
@@ -1496,9 +1497,9 @@ def _create_venv_with_pthfile(
 
     process = subprocess.run(
         [sys.executable, "-m", "venv", "--without-pip", virtualenv_root],
+        check=False,
         capture_output=True,
         encoding="UTF-8",
-        check=False,
     )
 
     if process.returncode != 0:
@@ -1534,6 +1535,10 @@ def _create_venv_with_pthfile(
     os.environ["VIRTUAL_ENV"] = virtualenv_root
 
     if populate_with_pip:
+        for requirements_txt_file in requirements.requirements_txt_files:
+            target_venv.pip_install(
+                ["--requirement", requirements_txt_file.path, "--require-hashes"]
+            )
         if requirements.pypi_requirements:
             requirements_list = [
                 str(req.requirement) for req in requirements.pypi_requirements
@@ -1566,6 +1571,16 @@ def _is_venv_up_to_date(
         if os.path.getmtime(dep_file) > metadata_mtime:
             return SiteUpToDateResult(
                 False, f'"{dep_file}" has changed since the virtualenv was created'
+            )
+
+    for requirements_txt_file in requirements.requirements_txt_files:
+        req_txt_path = requirements_txt_file.path
+        if (
+            os.path.exists(req_txt_path)
+            and os.path.getmtime(req_txt_path) > metadata_mtime
+        ):
+            return SiteUpToDateResult(
+                False, f'"{req_txt_path}" has changed since the virtualenv was created'
             )
 
     try:

@@ -170,6 +170,8 @@ const FEATURES = {
     "moz-src:///browser/components/urlbar/private/MarketSuggestions.sys.mjs",
   MDNSuggestions:
     "moz-src:///browser/components/urlbar/private/MDNSuggestions.sys.mjs",
+  SportsSuggestions:
+    "moz-src:///browser/components/urlbar/private/SportsSuggestions.sys.mjs",
   SuggestBackendMerino:
     "moz-src:///browser/components/urlbar/private/SuggestBackendMerino.sys.mjs",
   SuggestBackendMl:
@@ -698,6 +700,42 @@ class _QuickSuggest {
     return feature
       ? feature.isUrlEquivalentToResultUrl(url, result)
       : url == result.payload.url;
+  }
+
+  /**
+   * Returns the title and highlights for suggestions that should display their
+   * full keywords.
+   *
+   * When `fullKeyword` is defined, highlighting will be applied only to it, not
+   * to the title as a whole; otherwise highlighting will not be applied at all.
+   * It's unclear if that's the intended UI spec, but historically it's how
+   * highlighting has been implemented for suggestions that should display their
+   * full keywords.
+   *
+   * @param {object} options
+   * @param {Array} options.tokens
+   *   It is compatible to UrlbarQueryContext.tokens.
+   * @param {Values<typeof lazy.UrlbarUtils.HIGHLIGHT>} [options.highlightType]
+   * @param {string} [options.fullKeyword]
+   *   Full keyword if there is.
+   * @param {string} options.title
+   *   Suggestion title.
+   * @returns {object} { value, highlights }
+   *   The value will be used for title.
+   *   The highlights will be created by UrlbarUtils.getTokenMatches().
+   */
+  getFullKeywordTitleAndHighlights({
+    tokens,
+    highlightType,
+    fullKeyword,
+    title,
+  }) {
+    return {
+      value: fullKeyword ? `${fullKeyword} — ${title}` : title,
+      highlights: fullKeyword
+        ? lazy.UrlbarUtils.getTokenMatches(tokens, fullKeyword, highlightType)
+        : [],
+    };
   }
 
   /**

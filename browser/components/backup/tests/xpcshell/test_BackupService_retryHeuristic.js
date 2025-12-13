@@ -19,18 +19,20 @@ const BACKUP_DEBUG_INFO_PREF_NAME = "browser.backup.backup-debug-info";
 const BACKUP_DEFAULT_LOCATION_PREF_NAME = "browser.backup.location";
 
 function bsInProgressStateUpdate(bs, isBackupInProgress) {
+  // Check if already in desired state
+  if (bs.state.backupInProgress === isBackupInProgress) {
+    return Promise.resolve();
+  }
+
   return new Promise(resolve => {
-    bs.addEventListener(
-      "BackupService:StateUpdate",
-      () => {
-        if (bs.state.backupInProgress == isBackupInProgress) {
-          resolve();
-        } else {
-          Assert.ok(false, "Failure in waiting for state updates");
-        }
-      },
-      { once: true }
-    );
+    const listener = () => {
+      if (bs.state.backupInProgress === isBackupInProgress) {
+        bs.removeEventListener("BackupService:StateUpdate", listener);
+        resolve();
+      }
+    };
+
+    bs.addEventListener("BackupService:StateUpdate", listener);
   });
 }
 
@@ -81,7 +83,7 @@ add_task(async function test_retry_limit() {
     // ensure that there is no error code set
     Services.prefs.setIntPref(BACKUP_ERROR_CODE_PREF_NAME, ERRORS.NONE);
 
-    bs.createBackupOnIdleDispatch();
+    bs.createBackupOnIdleDispatch({});
 
     // #backupInProgress is set to true
     await bsInProgressStateUpdate(bs, true);
@@ -121,7 +123,7 @@ add_task(async function test_retry_limit() {
   // check if it switched to no longer creating backups on idle
   const previousCalls = bs.createBackup.callCount;
 
-  bs.createBackupOnIdleDispatch();
+  bs.createBackupOnIdleDispatch({});
 
   // wait a tick for the pref to update
   await new Promise(executeSoon);
@@ -148,7 +150,7 @@ add_task(async function test_retry_limit() {
   // eslint-disable-next-line mozilla/no-arbitrary-setTimeout
   await new Promise(resolve => setTimeout(resolve, 10));
 
-  bs.createBackupOnIdleDispatch();
+  bs.createBackupOnIdleDispatch({});
 
   // #backupInProgress is set to true
   await bsInProgressStateUpdate(bs, true);

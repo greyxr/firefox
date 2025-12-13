@@ -10,9 +10,6 @@
 // improves readability, particular for conditional blocks that exceed a single
 // screen.
 
-// Caret browsing is disabled on mobile (bug 476009)
-pref("accessibility.browsewithcaret_shortcut.enabled", false);
-
 pref("accessibility.typeaheadfind", false);
 pref("accessibility.typeaheadfind.flashBar", 1);
 pref("accessibility.typeaheadfind.linksonly", false);
@@ -111,6 +108,7 @@ pref("browser.meta_refresh_when_inactive.disabled", true);
 // The download protection UI is not implemented yet (bug 1239094).
 pref("browser.safebrowsing.downloads.enabled", false);
 
+pref("browser.safebrowsing.features.harmfuladdon.update", true);
 pref("browser.safebrowsing.features.cryptomining.update", true);
 pref("browser.safebrowsing.features.fingerprinting.update", true);
 pref("browser.safebrowsing.features.malware.update", true);
@@ -323,11 +321,6 @@ pref("media.navigator.permission.device", true);
 // this is to preserve battery and data (bug 1540573)
 pref("media.throttle-cellular-regardless-of-download-rate", true);
 
-// The maximum number of queued frames to send to the compositor.
-// On Android, it needs to be throttled because SurfaceTexture contains only one
-// (the most recent) image data. (bug 1299068)
-pref("media.video-queue.send-to-compositor-size", 1);
-
 // Increase necko buffer sizes for Android (bug 560591)
 pref("network.buffer.cache.size",  16384);
 
@@ -391,6 +384,9 @@ pref("toolkit.telemetry.unified", false);
 // Download protection lists are not available on Android (bug 1397938, bug 1394017)
 pref("urlclassifier.downloadAllowTable", "");
 pref("urlclassifier.downloadBlockTable", "");
+
+// Delay the CRC32 check for URLClassifier to improve applink performance. (bug 1956920, bug 1971949)
+pref("urlclassifier.delay_prefixes_crc32_check", true);
 
 // The Potentially Harmful Apps list replaces the malware one on Android (bug 1394017)
 pref("urlclassifier.malwareTable", "goog-harmful-proto,goog-unwanted-proto,moztest-harmful-simple,moztest-malware-simple,moztest-unwanted-simple");

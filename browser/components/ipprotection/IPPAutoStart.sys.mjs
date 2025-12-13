@@ -9,12 +9,15 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   IPProtectionServerlist:
     "resource:///modules/ipprotection/IPProtectionServerlist.sys.mjs",
+  IPPProxyManager: "resource:///modules/ipprotection/IPPProxyManager.sys.mjs",
+  IPPProxyStates: "resource:///modules/ipprotection/IPPProxyManager.sys.mjs",
   IPProtectionService:
     "resource:///modules/ipprotection/IPProtectionService.sys.mjs",
   IPProtectionStates:
     "resource:///modules/ipprotection/IPProtectionService.sys.mjs",
 });
 
+const AUTOSTART_FEATURE_ENABLE_PREF = "browser.ipProtection.features.autoStart";
 const AUTOSTART_PREF = "browser.ipProtection.autoStartEnabled";
 
 /**
@@ -38,6 +41,13 @@ class IPPAutoStartSingleton {
           this.uninit();
         }
       }
+    );
+
+    XPCOMUtils.defineLazyPreferenceGetter(
+      this,
+      "autoStartFeatureEnablePref",
+      AUTOSTART_FEATURE_ENABLE_PREF,
+      false
     );
   }
 
@@ -70,7 +80,11 @@ class IPPAutoStartSingleton {
   get autoStart() {
     // We activate the auto-start feature only if the pref is true and we have
     // the serverlist already.
-    return this.autoStartPref && lazy.IPProtectionServerlist.hasList;
+    return (
+      this.autoStartFeatureEnablePref &&
+      this.autoStartPref &&
+      lazy.IPProtectionServerlist.hasList
+    );
   }
 
   #handleEvent(_event) {
@@ -78,14 +92,13 @@ class IPPAutoStartSingleton {
       case lazy.IPProtectionStates.UNINITIALIZED:
       case lazy.IPProtectionStates.UNAVAILABLE:
       case lazy.IPProtectionStates.UNAUTHENTICATED:
-      case lazy.IPProtectionStates.ERROR:
         this.#shouldStartWhenReady = true;
         break;
 
       case lazy.IPProtectionStates.READY:
         if (this.#shouldStartWhenReady) {
           this.#shouldStartWhenReady = false;
-          lazy.IPProtectionService.start();
+          lazy.IPPProxyManager.start(/* user action: */ false);
         }
         break;
 
@@ -112,10 +125,14 @@ class IPPEarlyStartupFilter {
 
   init() {
     if (this.#autoStartAndAtStartup) {
-      lazy.IPProtectionService.proxyManager.createChannelFilter();
+      lazy.IPPProxyManager.createChannelFilter();
 
       lazy.IPProtectionService.addEventListener(
         "IPProtectionService:StateChanged",
+        this.handleEvent
+      );
+      lazy.IPPProxyManager.addEventListener(
+        "IPPProxyManager:StateChanged",
         this.handleEvent
       );
     }
@@ -127,6 +144,10 @@ class IPPEarlyStartupFilter {
     if (this.autoStartAndAtStartup) {
       this.#autoStartAndAtStartup = false;
 
+      lazy.IPPProxyManager.removeEventListener(
+        "IPPProxyManager:StateChanged",
+        this.handleEvent
+      );
       lazy.IPProtectionService.removeEventListener(
         "IPProtectionService:StateChanged",
         this.handleEvent
@@ -135,27 +156,26 @@ class IPPEarlyStartupFilter {
   }
 
   #cancelChannelFilter() {
-    lazy.IPProtectionService.proxyManager.cancelChannelFilter();
+    lazy.IPPProxyManager.cancelChannelFilter();
   }
 
   #handleEvent(_event) {
     switch (lazy.IPProtectionService.state) {
       case lazy.IPProtectionStates.UNAVAILABLE:
       case lazy.IPProtectionStates.UNAUTHENTICATED:
-      case lazy.IPProtectionStates.ERROR:
         // These states block the auto-start at startup.
         this.#cancelChannelFilter();
-        this.uninit();
-        break;
-
-      case lazy.IPProtectionStates.ACTIVE:
-        // We have completed our task.
         this.uninit();
         break;
 
       default:
         // Let's ignoring any other state.
         break;
+    }
+
+    if (lazy.IPPProxyManager.state === lazy.IPPProxyStates.ACTIVE) {
+      // We have completed our task.
+      this.uninit();
     }
   }
 }

@@ -2,8 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package org.mozilla.fenix.settings.settingssearch
 
 import android.os.Bundle
@@ -11,11 +9,15 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.fragment.app.Fragment
 import androidx.fragment.compose.content
+import androidx.lifecycle.coroutineScope
 import androidx.navigation.fragment.findNavController
-import org.mozilla.fenix.components.StoreProvider
+import mozilla.components.lib.state.helpers.StoreProvider.Companion.storeProvider
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.theme.FirefoxTheme
 
@@ -34,11 +36,15 @@ class SettingsSearchFragment : Fragment() {
         settingsSearchStore = buildSettingsSearchStore()
         (activity as? AppCompatActivity)?.supportActionBar?.hide()
         FirefoxTheme {
+            var isSearchFocused by rememberSaveable { mutableStateOf(true) }
+
             SettingsSearchScreen(
                 store = settingsSearchStore,
                 onBackClick = {
                     findNavController().popBackStack()
                 },
+                isSearchFocused = isSearchFocused,
+                onSearchFocusChange = { isSearchFocused = it },
             )
         }
     }
@@ -49,15 +55,17 @@ class SettingsSearchFragment : Fragment() {
     }
 
     private fun buildSettingsSearchStore(): SettingsSearchStore {
-        return StoreProvider.get(this) {
+        val recentSettingsSearchesRepository = FenixRecentSettingsSearchesRepository(requireContext())
+
+        return storeProvider.get { restoredState ->
             SettingsSearchStore(
-                initialState = SettingsSearchState.Default,
+                initialState = restoredState ?: SettingsSearchState.Default(emptyList()),
                 middleware = listOf(
                     SettingsSearchMiddleware(
-                        SettingsSearchMiddleware.Companion.Dependencies(
-                            navController = findNavController(),
-                         ),
                         fenixSettingsIndexer = requireContext().components.settingsIndexer,
+                        navController = findNavController(),
+                        recentSettingsSearchesRepository = recentSettingsSearchesRepository,
+                        scope = viewLifecycleOwner.lifecycle.coroutineScope,
                     ),
                 ),
             )

@@ -435,7 +435,7 @@ struct ProxyInfoCloneArgs
   nsCString type;
   nsCString host;
   int32_t port;
-  nsCString pathTemplate;
+  nsCString masqueTemplate;
   nsCString alpn;
   nsCString username;
   nsCString password;
@@ -603,6 +603,7 @@ struct ResourceTimingStructArgs {
   TimeStamp redirectEnd;
   uint64_t transferSize;
   uint64_t encodedBodySize;
+  uint64_t decodedBodySize;
 
   // Not actually part of resource timing, but not part of the transaction
   // timings either. These need to be passed to HttpChannelChild along with

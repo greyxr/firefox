@@ -4011,7 +4011,7 @@ void DebugAPI::slowPathTraceGeneratorFrame(JSTracer* tracer,
 
     if (Debugger::GeneratorWeakMap::Ptr entry =
             dbg->generatorFrames.lookupUnbarriered(generator)) {
-      PreBarriered<DebuggerFrame*>& frameObj = entry->value();
+      const PreBarriered<DebuggerFrame*>& frameObj = entry->value();
       if (frameObj->hasAnyHooks()) {
         // See comment above.
         TraceCrossCompartmentEdge(tracer, generator, &frameObj,
@@ -7409,6 +7409,10 @@ extern JS_PUBLIC_API bool JS_DefineDebuggerObject(JSContext* cx,
   debugProto->setReservedSlot(Debugger::JSSLOT_DEBUG_MEMORY_PROTO,
                               ObjectValue(*memoryProto));
   return true;
+}
+
+extern JS_PUBLIC_API const char* JS_GetLastOOMStackTrace(JSContext* cx) {
+  return cx->getOOMStackTrace();
 }
 
 JS_PUBLIC_API bool JS::dbg::IsDebugger(JSObject& obj) {

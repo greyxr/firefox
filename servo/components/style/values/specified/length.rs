@@ -8,6 +8,7 @@
 
 use super::{AllowQuirks, Number, Percentage, ToComputedValue};
 use crate::computed_value_flags::ComputedValueFlags;
+use crate::derives::*;
 use crate::font_metrics::{FontMetrics, FontMetricsOrientation};
 #[cfg(feature = "gecko")]
 use crate::gecko_bindings::structs::GeckoFontMetrics;
@@ -25,7 +26,8 @@ use crate::values::specified::NonNegativeNumber;
 use crate::values::CSSFloat;
 use crate::{Zero, ZeroNoPercent};
 use app_units::AU_PER_PX;
-use cssparser::{Parser, Token};
+use cssparser::{match_ignore_ascii_case, Parser, Token};
+use debug_unreachable::debug_unreachable;
 use std::cmp;
 use std::fmt::{self, Write};
 use style_traits::values::specified::AllowedNumericType;
@@ -314,7 +316,7 @@ impl FontRelativeLength {
                 FontMetricsOrientation::Horizontal,
                 QueryFontMetricsFlags::empty(),
             );
-            metrics.x_height_or_default(&reference_font_size)
+            metrics.x_height_or_default(reference_font_size.used_size())
         }
 
         fn ch_size(
@@ -336,7 +338,7 @@ impl FontRelativeLength {
                 QueryFontMetricsFlags::NEEDS_CH,
             );
             metrics.zero_advance_measure_or_default(
-                &reference_font_size,
+                reference_font_size.used_size(),
                 context.style().writing_mode.is_upright(),
             )
         }
@@ -362,7 +364,7 @@ impl FontRelativeLength {
                 FontMetricsOrientation::MatchContextPreferVertical,
                 QueryFontMetricsFlags::NEEDS_IC,
             );
-            metrics.ic_width_or_default(&reference_font_size)
+            metrics.ic_width_or_default(reference_font_size.used_size())
         }
 
         let reference_font_size = base_size.resolve(context);

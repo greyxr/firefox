@@ -653,7 +653,7 @@ MSG_DEF(JSMSG_INTL_DURATION_INVALID_DISPLAY_OPTION, 1, JSEXN_RANGEERR, "{0} can'
 MSG_DEF(JSMSG_INTL_DURATION_INVALID_DISPLAY_OPTION_DEFAULT_STYLE, 1, JSEXN_RANGEERR, "{0} can't use \"always\" display when style defaults to \"numeric\"")
 MSG_DEF(JSMSG_INTL_DURATION_INVALID_DISPLAY_OPTION_DEFAULT_DISPLAY, 1, JSEXN_RANGEERR, "{0} can't use \"numeric\" style when display defaults to \"always\"")
 MSG_DEF(JSMSG_INVALID_FORMAT_OPTIONS,  1, JSEXN_TYPEERR, "can't format {0} using the requested options")
-MSG_DEF(JSMSG_DEPRECATED_CALENDAR,     1, JSEXN_WARN, "\"{0}\" is deprecated, use \"islamic-tbla\" instead")
+MSG_DEF(JSMSG_ISLAMIC_FALLBACK,        0, JSEXN_WARN, "\"islamic\" does not specify the calendar variant. \"islamic-tbla\" was used. Please specify one of \"islamic-umalqura\", \"islamic-tbla\", or \"islamic-civil\" explicitly.")
 
 // RegExp
 MSG_DEF(JSMSG_BAD_CLASS_RANGE,         0, JSEXN_SYNTAXERR, "invalid range in character class")
@@ -689,6 +689,10 @@ MSG_DEF(JSMSG_INVALID_CLASS_SET_OP,        0, JSEXN_SYNTAXERR, "invalid class se
 MSG_DEF(JSMSG_INVALID_CHAR_IN_CLASS,       0, JSEXN_SYNTAXERR, "invalid character in class in regular expression")
 MSG_DEF(JSMSG_NEGATED_CLASS_WITH_STR,      0, JSEXN_SYNTAXERR, "negated character class with strings in regular expression")
 MSG_DEF(JSMSG_MULTIPLE_FLAG_DASHES,        0, JSEXN_SYNTAXERR, "multiple dashes in flag group")
+MSG_DEF(JSMSG_INCOMPATIBLE_RECEIVER, 1, JSEXN_TYPEERR, "RegExp static property '{0}' called with incompatible receiver")
+MSG_DEF(JSMSG_REGEXP_STATIC_EMPTY, 1, JSEXN_TYPEERR, "RegExp static property '{0}' is invalid")
+MSG_DEF(JSMSG_REGEXP_CROSS_REALM, 0, JSEXN_TYPEERR, "RegExp operation not permitted on object from different realm")
+MSG_DEF(JSMSG_REGEXP_LEGACY_FEATURES_DISABLED, 0, JSEXN_TYPEERR, "RegExp legacy features are disabled")
 
 // Typed object
 MSG_DEF(JSMSG_TYPEDOBJECT_SETTING_IMMUTABLE, 0, JSEXN_ERR, "setting immutable field")
@@ -839,6 +843,7 @@ MSG_DEF(JSMSG_BAD_WEAKREF_TARGET,                        0, JSEXN_TYPEERR, "cann
 
 // Iterator Helpers
 MSG_DEF(JSMSG_NEGATIVE_LIMIT,                            0, JSEXN_RANGEERR, "Iterator limits cannot be negative")
+MSG_DEF(JSMSG_INVALID_CHUNKSIZE,                         0, JSEXN_RANGEERR, "Iterator chunkSize must be an integer between 1 and 2**32-1 inclusive")
 MSG_DEF(JSMSG_ITERATOR_ZIP_INVALID_OPTION_TYPE,          2, JSEXN_TYPEERR, "invalid type for \"{0}\" option: {1}")
 MSG_DEF(JSMSG_ITERATOR_ZIP_INVALID_OPTION_VALUE,         2, JSEXN_TYPEERR, "invalid value for \"{0}\" option: {1}")
 MSG_DEF(JSMSG_ITERATOR_ZIP_STRICT_OPEN_ITERATOR,         0, JSEXN_TYPEERR, "too few iterator results for \"strict\" mode")

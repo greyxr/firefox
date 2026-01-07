@@ -246,10 +246,24 @@ export class BaseContent extends React.PureComponent {
         if (hash === "#customize-topics") {
           this.toggleSectionsMgmtPanel();
         }
+      } else if (this.props.App.customizeMenuVisible) {
+        this.closeCustomizationMenu();
       }
     };
 
-    this._onHashChange();
+    // Using the Performance API to detect page reload vs fresh navigation.
+    // Only open customize menu on fresh navigation, not on page refresh.
+    // See: https://developer.mozilla.org/en-US/docs/Web/API/Performance/getEntriesByType
+    // See: https://developer.mozilla.org/en-US/docs/Web/API/PerformanceEntry/entryType#navigation
+    // See: https://developer.mozilla.org/en-US/docs/Web/API/PerformanceNavigationTiming/type
+    const isReload =
+      globalThis.performance?.getEntriesByType("navigation")[0]?.type ===
+      "reload";
+
+    if (!isReload) {
+      this._onHashChange();
+    }
+
     globalThis.addEventListener("hashchange", this._onHashChange);
   }
 
@@ -678,7 +692,6 @@ export class BaseContent extends React.PureComponent {
       !prefs["feeds.topsites"] &&
       !pocketEnabled &&
       filteredSections.filter(section => section.enabled).length === 0;
-    const searchHandoffEnabled = prefs["improvesearch.handoffToAwesomebar"];
     const enabledSections = {
       topSitesEnabled: prefs["feeds.topsites"],
       pocketEnabled: prefs["feeds.section.topstories"],
@@ -846,7 +859,6 @@ export class BaseContent extends React.PureComponent {
                     showLogo={
                       noSectionsEnabled || prefs["logowordmark.alwaysVisible"]
                     }
-                    handoffEnabled={searchHandoffEnabled}
                     {...props.Search}
                   />
                 </ErrorBoundary>

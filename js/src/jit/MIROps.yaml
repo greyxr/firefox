@@ -1964,6 +1964,7 @@
   congruent_to: if_operands_equal
   alias_set: none
   generate_lir: true
+  lir_result_type: none
   lir_temps: 1
 
 # Inlined TypedArray.prototype.subarray
@@ -2184,6 +2185,16 @@
 - name: LoadFixedSlot
   gen_boilerplate: false
 
+- name: LoadFixedSlotFromOffset
+  operands:
+    object: Object
+    offset: Int32
+  result_type: Value
+  movable: true
+  congruent_to: if_operands_equal
+  alias_set: custom
+  generate_lir: true
+
 - name: LoadFixedSlotAndUnbox
   gen_boilerplate: false
 
@@ -2191,6 +2202,12 @@
   gen_boilerplate: false
 
 - name: StoreFixedSlot
+  gen_boilerplate: false
+
+- name: StoreFixedSlotFromOffset
+  gen_boilerplate: false
+
+- name: StoreDynamicSlotFromOffset
   gen_boilerplate: false
 
 - name: GetPropertyCache
@@ -2291,6 +2308,29 @@
   alias_set: custom
   generate_lir: true
   lir_temps: 2
+
+- name: GuardShapeListToOffset
+  operands:
+    object: Object
+  arguments:
+    shapeList: const ShapeListWithOffsetsSnapshot*
+  result_type: Int32
+  guard: true
+  movable: true
+  congruent_to: custom
+  alias_set: custom
+  generate_lir: true
+  lir_temps: 2
+
+- name: GuardMultipleShapesToOffset
+  operands:
+    object: Object
+    shapeList: Object
+  result_type: Int32
+  guard: true
+  movable: true
+  congruent_to: if_operands_equal
+  alias_set: custom
 
 - name: GuardProto
   gen_boilerplate: false
@@ -2782,6 +2822,16 @@
 
 - name: LoadDynamicSlot
   gen_boilerplate: false
+
+- name: LoadDynamicSlotFromOffset
+  operands:
+    slots: Slots
+    offset: Int32
+  result_type: Value
+  movable: true
+  congruent_to: if_operands_equal
+  alias_set: custom
+  generate_lir: true
 
 # Inline call to access a function's environment (scope chain).
 - name: FunctionEnvironment
@@ -3543,6 +3593,7 @@
   result_type: Object
   alias_set: custom
   generate_lir: true
+  lir_result_type: none
 
 # Return true if the object is definitely a TypedArray constructor, but not
 # necessarily from the currently active realm. Return false if the object is
@@ -3645,6 +3696,7 @@
   folds_to: custom
   alias_set: none
   generate_lir: true
+  lir_result_type: none
 
 - name: GuardInt32Range
   operands:
@@ -4179,6 +4231,7 @@
   congruent_to: if_operands_equal
   type_policy: none
   generate_lir: true
+  lir_result_type: none
   lir_temps: 1
   alias_set: none
   guard: true
@@ -4297,7 +4350,7 @@
 - name: WasmFloatRegisterResult
   gen_boilerplate: false
 
-- name: WasmBuiltinFloatRegisterResult
+- name: WasmSystemFloatRegisterResult
   gen_boilerplate: false
 
 - name: WasmRegister64Result
@@ -4333,8 +4386,9 @@
 
 - name: WasmStackSwitchToMain
   operands:
-    suspender: Object
-    fn: Object
+    instance: WasmAnyRef
+    suspender: WasmAnyRef
+    fn: WasmAnyRef
     data: WasmAnyRef
   result_type: WasmAnyRef
   type_policy: none
@@ -4343,8 +4397,9 @@
 
 - name: WasmStackSwitchToSuspendable
   operands:
-    suspender: Object
-    fn: Object
+    instance: WasmAnyRef
+    suspender: WasmAnyRef
+    fn: WasmAnyRef
     data: WasmAnyRef
   type_policy: none
   possibly_calls: true
@@ -4352,11 +4407,13 @@
 
 - name: WasmStackContinueOnSuspendable
   operands:
-    suspender: Object
+    instance: WasmAnyRef
+    suspender: WasmAnyRef
     result: WasmAnyRef
   type_policy: none
   possibly_calls: true
   generate_lir: true
+  lir_temps: 2
 
 - name: WasmBinarySimd128
   gen_boilerplate: false

@@ -6,6 +6,16 @@
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
 const AIWINDOW_URL = "chrome://browser/content/aiwindow/aiWindow.html";
+const AIWINDOW_URI = Services.io.newURI(AIWINDOW_URL);
+
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  ChatStore:
+    "moz-src:///browser/components/aiwindow/ui/modules/ChatStore.sys.mjs",
+
+  AIWindowMenu:
+    "moz-src:///browser/components/aiwindow/ui/modules/AIWindowMenu.sys.mjs",
+});
 
 /**
  * AI Window Service
@@ -14,6 +24,7 @@ const AIWINDOW_URL = "chrome://browser/content/aiwindow/aiWindow.html";
 export const AIWindow = {
   _initialized: false,
   _windowStates: new Map(),
+  _aiWindowMenu: null,
 
   /**
    * Handles startup tasks
@@ -31,6 +42,8 @@ export const AIWindow = {
       false
     );
 
+    ChromeUtils.defineLazyGetter(this, "chatStore", () => new lazy.ChatStore());
+
     this._initialized = true;
     this._windowStates.set(win, {});
   },
@@ -41,23 +54,24 @@ export const AIWindow = {
    * @param {object} options Used in BrowserWindowTracker.openWindow
    * @param {object} options.openerWindow Window making the BrowserWindowTracker.openWindow call
    * @param {object} options.args Array of arguments to pass to new window
-   * @param {boolean} options.aiWindow Should new window be AI Window
-   * @param {boolean} options.private Should new window be Private Window
+   * @param {boolean} [options.aiWindow] Should new window be AI Window (true), Classic Window (false), or inherited from opener (undefined, default)
+   * @param {boolean} [options.private] Should new window be Private Window
+   * @param {boolean} [options.restoreSession] Should previous AI Window session be restored
    *
    * @returns {object} Modified arguments appended to the options object
    */
   handleAIWindowOptions({
     openerWindow,
     args,
-    aiWindow,
-    private: isPrivate,
+    aiWindow = undefined,
+    private: isPrivate = false,
+    restoreSession = false,
   } = {}) {
     // Indicates whether the new window should inherit AI Window state from opener window
     const canInheritAIWindow =
-      this.isAIWindowEnabled() &&
-      this.isAIWindowActive(openerWindow) &&
+      this.isAIWindowActiveAndEnabled(openerWindow) &&
       !isPrivate &&
-      !aiWindow;
+      typeof aiWindow === "undefined";
 
     const willOpenAIWindow =
       (aiWindow && this.isAIWindowEnabled()) || canInheritAIWindow;
@@ -72,7 +86,7 @@ export const AIWindow = {
       const aiWindowURI = Cc["@mozilla.org/supports-string;1"].createInstance(
         Ci.nsISupportsString
       );
-      aiWindowURI.data = AIWINDOW_URL;
+      aiWindowURI.data = restoreSession ? "" : AIWINDOW_URL;
       args.appendElement(aiWindowURI);
 
       const aiOption = Cc["@mozilla.org/hash-property-bag;1"].createInstance(
@@ -88,10 +102,9 @@ export const AIWindow = {
   /**
    * Is current window an AI Window
    *
-   * @param {object} win current Window
+   * @param {Window} win current Window
    * @returns {boolean} whether current Window is an AI Window
    */
-
   isAIWindowActive(win) {
     return !!win && win.document.documentElement.hasAttribute("ai-window");
   },
@@ -101,9 +114,53 @@ export const AIWindow = {
    *
    * @returns {boolean} whether AI Window is enabled
    */
-
   isAIWindowEnabled() {
     return this.AIWindowEnabled;
+  },
+
+  isAIWindowActiveAndEnabled(win) {
+    return this.isAIWindowActive(win) && this.AIWindowEnabled;
+  },
+
+  /**
+   * Check if window is being opened as an AI Window.
+   *
+   * @param {Window} win - The window to check
+   * @returns {boolean} whether the window is being opened as an AI Window
+   */
+  isOpeningAIWindow(win) {
+    const windowArgs = win?.arguments?.[1];
+    if (!(windowArgs instanceof Ci.nsIPropertyBag2)) {
+      return false;
+    }
+
+    return windowArgs.hasKey("ai-window");
+  },
+
+  /**
+   * Is AI Window content page active
+   *
+   * @param {nsIURI} uri current URI
+   * @returns {boolean} whether AI Window content page is active
+   */
+  isAIWindowContentPage(uri) {
+    return AIWINDOW_URI.equalsExceptRef(uri);
+  },
+
+  /**
+   * Adds the AI Window app menu options
+   *
+   * @param {Event} event - History menu click event
+   * @param {Window} win - current Window reference
+   *
+   * @returns {Promise} - Resolves when menu is done being added
+   */
+  appMenu(event, win) {
+    if (!this._aiWindowMenu) {
+      this._aiWindowMenu = new lazy.AIWindowMenu();
+    }
+
+    return this._aiWindowMenu.addMenuitems(event, win);
   },
 
   get newTabURL() {

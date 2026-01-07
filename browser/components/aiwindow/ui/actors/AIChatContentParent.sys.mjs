@@ -6,9 +6,7 @@
  * JSWindowActor to pass data between AIChatContent singleton and content pages.
  */
 export class AIChatContentParent extends JSWindowActorParent {
-  async dispatchAIResponse(response) {
-    return this.sendQuery("AIChatContent:DispatchAIResponse", {
-      response,
-    });
+  dispatchMessageToChatContent(response) {
+    this.sendAsyncMessage("AIChatContent:DispatchMessage", response);
   }
 }

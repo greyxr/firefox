@@ -1450,7 +1450,8 @@ class UrlbarInputTestUtils {
       "shown"
     );
     let rebuildPromise = lazy.BrowserTestUtils.waitForEvent(popup, "rebuild");
-    this.EventUtils.synthesizeMouseAtCenter(button, {}, win);
+    // Ensure the pop-up opens.
+    button.open = true;
     await Promise.all([promiseMenuOpen, rebuildPromise]);
 
     return popup;
@@ -1461,6 +1462,23 @@ class UrlbarInputTestUtils {
       this.searchModeSwitcherPopup(win),
       "hidden"
     );
+  }
+
+  /**
+   * Gets the icon url of the search mode switcher icon.
+   *
+   * @param {ChromeWindow} win
+   * @returns {?string}
+   */
+  getSearchModeSwitcherIcon(win) {
+    let searchModeSwitcherButton = this.#urlbar(win).querySelector(
+      ".searchmode-switcher-icon"
+    );
+
+    // match and capture the URL inside `url("...")`
+    let re = /url\("([^"]+)"\)/;
+    let { listStyleImage } = win.getComputedStyle(searchModeSwitcherButton);
+    return listStyleImage.match(re)?.[1] ?? null;
   }
 
   async openTrustPanel(win) {

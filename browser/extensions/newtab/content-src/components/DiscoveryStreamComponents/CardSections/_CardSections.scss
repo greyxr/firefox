@@ -59,17 +59,6 @@
       height: 32px;
       width: 32px;
     }
-
-    &:hover,
-    &:active,
-    &:focus-within,
-    &.active {
-      .meta {
-        .source-wrapper .source {
-          display: none;
-        }
-      }
-    }
   }
 
   &.ds-card.sections-card-ui {
@@ -94,7 +83,7 @@
     .ds-image.img {
       width: 100%;
       height: 100%;
-      padding-top: 0;
+      padding-block-start: 0;
       min-width: 100%;
     }
 
@@ -290,7 +279,7 @@
     }
 
     .sections-card-footer {
-      margin-top: auto;
+      margin-block-start: auto;
     }
   }
 }
@@ -391,7 +380,7 @@
         }
 
         .sections-card-footer {
-          margin-top: auto;
+          margin-block-start: auto;
         }
       }
 

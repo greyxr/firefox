@@ -16,8 +16,32 @@ menu-file-new-ai-window =
 menu-file-new-classic-window =
     .label = New Classic Window
 
+menu-history-chats =
+    .label = Chats
+
+menu-history-chats-recent =
+    .label = Recent Chats
+
 ## Input CTA
 
 aiwindow-input-cta-label-chat = Chat
 aiwindow-input-cta-label-search = Search
 aiwindow-input-cta-label-navigate = Navigate
+
+## Smartbar
+
+smartbar-placeholder =
+    .placeholder = Ask, search, or type a URL
+
+## Firstrun onboarding
+
+aiwindow-firstrun-title = Welcome to Smart Window
+aiwindow-firstrun-model-title = Pick a model to start
+aiwindow-firstrun-model-subtitle = Switch anytime to find your best fit.
+aiwindow-firstrun-model-fast-label = Fastest
+aiwindow-firstrun-model-fast-body = Best for quick answers to everyday questions
+aiwindow-firstrun-model-allpurpose-label = All-purpose
+aiwindow-firstrun-model-allpurpose-body = Best for a variety of quick and complex features
+aiwindow-firstrun-model-personal-label = Personalization
+aiwindow-firstrun-model-personal-body = Best for learning with you
+aiwindow-firstrun-button = Let’s go

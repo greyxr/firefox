@@ -40,6 +40,7 @@
 #include "mozilla/intl/Bidi.h"
 #include "mozilla/intl/Segmenter.h"
 #include "mozilla/intl/UnicodeProperties.h"
+#include "mozilla/widget/ThemeDrawing.h"
 #include "nsBlockFrame.h"
 #include "nsCOMPtr.h"
 #include "nsCSSColorUtils.h"
@@ -3332,6 +3333,10 @@ static bool IsJustifiableCharacter(const nsStyleText* aTextStyle,
   }
 
   if (justifyStyle == StyleTextJustify::InterCharacter) {
+    char32_t u = aBuffer.ScalarValueAt(AssertedCast<uint32_t>(aPos));
+    if (intl::UnicodeProperties::IsCursiveScript(u)) {
+      return false;
+    }
     return true;
   } else if (justifyStyle == StyleTextJustify::InterWord) {
     return false;
@@ -4164,16 +4169,28 @@ bool nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
       uint32_t runOffsetInSubstring = run.GetSkippedOffset() - aRange.start;
       gfxSkipCharsIterator iter = run.GetPos();
       for (int32_t i = 0; i < run.GetRunLength(); ++i) {
+        auto currScalar = [&]() -> char32_t {
+          iter.SetSkippedOffset(run.GetSkippedOffset() + i);
+          return mCharacterDataBuffer.ScalarValueAt(iter.GetOriginalOffset());
+        };
         if (!atStart && before != 0 &&
             CanAddSpacingBefore(mTextRun, run.GetSkippedOffset() + i,
-                                newlineIsSignificant)) {
+                                newlineIsSignificant) &&
+            !intl::UnicodeProperties::IsCursiveScript(currScalar())) {
           aSpacing[runOffsetInSubstring + i].mBefore += before;
         }
         if (after != 0 &&
             CanAddSpacingAfter(mTextRun, run.GetSkippedOffset() + i,
                                newlineIsSignificant)) {
-          // End of a cluster, not in a ligature: put letter-spacing after it
-          aSpacing[runOffsetInSubstring + i].mAfter += after;
+          // End of a cluster, not in a ligature: put letter-spacing after it,
+          // unless the base char of the cluster belonged to a cursive script.
+          iter.SetSkippedOffset(run.GetSkippedOffset() + i);
+          FindClusterStart(mTextRun, run.GetOriginalOffset(), &iter);
+          char32_t baseChar =
+              mCharacterDataBuffer.ScalarValueAt(iter.GetOriginalOffset());
+          if (!intl::UnicodeProperties::IsCursiveScript(baseChar)) {
+            aSpacing[runOffsetInSubstring + i].mAfter += after;
+          }
         }
         if (mWordSpacing && IsCSSWordSpacingSpace(mCharacterDataBuffer,
                                                   i + run.GetOriginalOffset(),
@@ -4195,9 +4212,7 @@ bool nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
             (textIncludesCJK ||
              run.GetOriginalOffset() + i == mFrame->GetContentOffset()) &&
             mTextRun->IsClusterStart(run.GetSkippedOffset() + i)) {
-          const char32_t currScalar =
-              mCharacterDataBuffer.ScalarValueAt(run.GetOriginalOffset() + i);
-          const auto currClass = TextAutospace::GetCharClass(currScalar);
+          const auto currClass = TextAutospace::GetCharClass(currScalar());
 
           // It is rare for the current class to be a combining mark, as
           // combining marks are not cluster starts. We still check in case a
@@ -5690,14 +5705,14 @@ static gfxFloat ComputeDecorationLineThickness(
     const gfxFont::Metrics& aFontMetrics, const gfxFloat aAppUnitsPerDevPixel,
     const nsIFrame* aFrame) {
   if (aThickness.IsAuto()) {
-    return aAutoValue;
+    return widget::ThemeDrawing::SnapBorderWidth(aAutoValue);
   }
-
   if (aThickness.IsFromFont()) {
-    return aFontMetrics.underlineSize;
+    return widget::ThemeDrawing::SnapBorderWidth(aFontMetrics.underlineSize);
   }
   auto em = [&] { return aFrame->StyleFont()->mSize.ToAppUnits(); };
-  return aThickness.AsLengthPercentage().Resolve(em) / aAppUnitsPerDevPixel;
+  return widget::ThemeDrawing::SnapBorderWidth(
+      aThickness.AsLengthPercentage().Resolve(em) / aAppUnitsPerDevPixel);
 }
 
 // Helper function for implementing text-underline-offset and -position
@@ -6005,7 +6020,6 @@ void nsTextFrame::UnionAdditionalOverflow(nsPresContext* aPresContext,
       decorationStyle = StyleTextDecorationStyle::Solid;
     }
     nsCSSRendering::DecorationRectParams params;
-
     bool useVerticalMetrics = verticalRun && mTextRun->UseCenterBaseline();
     nsFontMetrics* fontMetrics = aProvider.GetFontMetrics();
     RefPtr<gfxFont> font =

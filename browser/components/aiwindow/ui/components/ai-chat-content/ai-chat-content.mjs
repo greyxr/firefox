@@ -10,28 +10,50 @@ import { MozLitElement } from "chrome://global/content/lit-utils.mjs";
  */
 export class AIChatContent extends MozLitElement {
   static properties = {
-    messages: { type: Array },
+    conversationState: { type: Array },
   };
 
   constructor() {
     super();
-    this.messages = [];
+    this.conversationState = [];
   }
 
   connectedCallback() {
     super.connectedCallback();
-
-    // Listen for ai-response events as fallback
-    this.addEventListener("ai-response", this.handleAIResponseEvent.bind(this));
+    this.#initEventListeners();
   }
 
   /**
-   * Add an AI response to the chat
-   *
-   * @param {string} response - The AI response text
+   * Initialize event listeners for AI chat content events
    */
-  addAIResponse(response) {
-    this.messages = [...this.messages, { type: "ai", content: response }];
+
+  #initEventListeners() {
+    this.addEventListener(
+      "aiChatContentActor:message",
+      this.messageEvent.bind(this)
+    );
+  }
+
+  messageEvent(event) {
+    const message = event.detail;
+    if (message.role === "assistant") {
+      this.handleAIResponseEvent(event);
+      return;
+    }
+    this.handleUserPromptEvent(event);
+  }
+
+  /**
+   *  Handle user prompt events
+   *
+   * @param {CustomeEvent} event - The custom event containing the user prompt
+   */
+
+  handleUserPromptEvent(event) {
+    const { content } = event.detail;
+
+    this.conversationState.push({ role: "user", content });
+
     this.requestUpdate();
   }
 
@@ -40,28 +62,28 @@ export class AIChatContent extends MozLitElement {
    *
    * @param {CustomEvent} event - The custom event containing the response
    */
+
   handleAIResponseEvent(event) {
-    console.warn("Received AI response event:", event);
-    // TODO - Use Markdown to render rich text responses
-    this.addAIResponse(event.detail);
+    const { ordinal } = event.detail;
+
+    this.conversationState[ordinal] = event.detail;
+
+    this.requestUpdate();
   }
 
   render() {
     return html`
-      <div>
-        <div>
-          ${this.messages.map(
-            (message, index) => html`
-              <div key=${index}>
-                <strong>${message.type === "ai" ? "AI" : "User"}:</strong>
-                ${message.content}
-              </div>
-            `
-          )}
-          ${this.messages.length === 0
-            ? html`<div>Chat will appear here...</div>`
-            : ""}
-        </div>
+      <link
+        rel="stylesheet"
+        href="chrome://browser/content/aiwindow/components/ai-chat-content.css"
+      />
+      <div class="chat-content-wrapper">
+        ${this.conversationState.map(msg => {
+          return html`<ai-chat-message
+            .message=${msg.content.body}
+            .role=${msg.role}
+          ></ai-chat-message>`;
+        })}
       </div>
     `;
   }

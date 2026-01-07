@@ -560,7 +560,7 @@ impl NeqoHttp3Conn {
     fn record_stats_in_glean(&self) {
         use firefox_on_glean::metrics::networking as glean;
         use neqo_common::Ecn;
-        use neqo_transport::ecn;
+        use neqo_transport::{ecn, CongestionEvent};
 
         // Metric values must be recorded as integers. Glean does not support
         // floating point distributions. In order to represent values <1, they
@@ -672,8 +672,9 @@ impl NeqoHttp3Conn {
             }
         }
 
-        // Ignore connections into the void.
+        // Ignore connections into the void for metrics where it makes sense.
         if stats.packets_rx != 0 {
+            // Calculate and collect packet loss ratio.
             if let Ok(loss) =
                 i64::try_from((stats.lost * PRECISION_FACTOR_USIZE) / stats.packets_tx)
             {
@@ -683,13 +684,20 @@ impl NeqoHttp3Conn {
                 qwarn!("{msg}");
                 debug_assert!(false, "{msg}");
             }
+
+            // Count whether the connection exited slow start.
+            if stats.cc.slow_start_exited {
+                glean::http_3_slow_start_exited.get("exited").add(1);
+            } else {
+                glean::http_3_slow_start_exited.get("not_exited").add(1);
+            }
         }
 
-        // Ignore connections that never had loss induced congestion events (and prevent dividing by zero)
-        if stats.cc.congestion_events_loss != 0 {
+        // Ignore connections that never had loss induced congestion events (and prevent dividing by zero).
+        if stats.cc.congestion_events[CongestionEvent::Loss] != 0 {
             if let Ok(spurious) = i64::try_from(
-                (stats.cc.congestion_events_spurious * PRECISION_FACTOR_USIZE)
-                    / stats.cc.congestion_events_loss,
+                (stats.cc.congestion_events[CongestionEvent::Spurious] * PRECISION_FACTOR_USIZE)
+                    / stats.cc.congestion_events[CongestionEvent::Loss],
             ) {
                 glean::http_3_spurious_congestion_event_ratio
                     .accumulate_single_sample_signed(spurious);
@@ -698,6 +706,26 @@ impl NeqoHttp3Conn {
                 qwarn!("{msg}");
                 debug_assert!(false, "{msg}");
             }
+        }
+
+        // Collect congestion event reason metric
+        if let Ok(ce_loss) = i32::try_from(stats.cc.congestion_events[CongestionEvent::Loss]) {
+            glean::http_3_congestion_event_reason
+                .get("loss")
+                .add(ce_loss);
+        } else {
+            let msg = "Failed to convert to i32 for use with glean";
+            qwarn!("{msg}");
+            debug_assert!(false, "{msg}");
+        }
+        if let Ok(ce_ecn) = i32::try_from(stats.cc.congestion_events[CongestionEvent::Ecn]) {
+            glean::http_3_congestion_event_reason
+                .get("ecn-ce")
+                .add(ce_ecn);
+        } else {
+            let msg = "Failed to convert to i32 for use with glean";
+            qwarn!("{msg}");
+            debug_assert!(false, "{msg}");
         }
     }
 

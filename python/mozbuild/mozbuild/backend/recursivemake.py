@@ -13,6 +13,7 @@ from operator import itemgetter
 
 import mozpack.path as mozpath
 from mozpack.manifests import InstallManifest
+from mozshellutil import quote as shell_quote
 
 from mozbuild import frontend
 from mozbuild.frontend.context import (
@@ -22,7 +23,6 @@ from mozbuild.frontend.context import (
     RenamedSourcePath,
     SourcePath,
 )
-from mozbuild.shellutil import quote as shell_quote
 
 from ..frontend.data import (
     BaseLibrary,
@@ -1853,7 +1853,15 @@ class RecursiveMakeBackend(MakeBackend):
             basename = os.path.basename(source)
             sorted_nonstatic_ipdl_basenames.append(basename)
             rule = mk.create_rule([basename])
-            rule.add_dependencies([source])
+            rule.add_dependencies(
+                [
+                    source,
+                    "backend.mk",
+                    "Makefile",
+                    "$(DEPTH)/config/autoconf.mk",
+                    "$(topsrcdir)/config/config.mk",
+                ]
+            )
             rule.add_commands(
                 [
                     "$(RM) $@",
@@ -1935,10 +1943,15 @@ class RecursiveMakeBackend(MakeBackend):
         for source in sorted(webidls.all_preprocessed_sources()):
             basename = os.path.basename(source)
             rule = mk.create_rule([basename])
-            # GLOBAL_DEPS would be used here, but due to the include order of
-            # our makefiles it's not set early enough to be useful, so we use
-            # WEBIDL_PP_DEPS, which has analagous content.
-            rule.add_dependencies([source, "$(WEBIDL_PP_DEPS)"])
+            rule.add_dependencies(
+                [
+                    source,
+                    "backend.mk",
+                    "Makefile",
+                    "$(DEPTH)/config/autoconf.mk",
+                    "$(topsrcdir)/config/config.mk",
+                ]
+            )
             rule.add_commands(
                 [
                     # Remove the file before writing so bindings that go from

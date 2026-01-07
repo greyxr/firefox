@@ -384,6 +384,14 @@ module.exports = {
               "Avoid literal values. Use variables (e.g. var(--font-size-small)) or inherit/unset/etc.",
           },
         ],
+        "csstools/use-logical": [
+          "always",
+          {
+            // Bug 2003301: Do not enforce logical properties for any height/width properties
+            except: [/^(min-|max-)?width/i, /^(min-|max-)?height/i],
+            severity: "error",
+          },
+        ],
       },
     },
     {
@@ -413,6 +421,8 @@ module.exports = {
         // Testing does not use design tokens
         "testing/**",
         // UA Widgets should not use design tokens
+        "toolkit/themes/shared/colorpicker-common.css",
+        "toolkit/themes/shared/colorpicker.css",
         "toolkit/themes/shared/media/pipToggle.css",
         "toolkit/themes/shared/media/videocontrols.css",
         "toolkit/content/widgets/datetimebox.css",

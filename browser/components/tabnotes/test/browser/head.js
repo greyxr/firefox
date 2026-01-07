@@ -7,25 +7,78 @@ const { TabNotes } = ChromeUtils.importESModule(
 );
 
 /**
- * @param {string} url
- * @returns {Promise<[undefined, string]>}
+ * @param {Node} triggerNode
+ * @param {string} contextMenuId
+ * @returns {Promise<XULMenuElement|XULPopupElement>}
  */
-function observeTabNoteCreated(url) {
-  return TestUtils.topicObserved("TabNote:Created", (_, data) => data == url);
+async function getContextMenu(triggerNode, contextMenuId) {
+  let win = triggerNode.ownerGlobal;
+  triggerNode.scrollIntoView({ behavior: "instant" });
+  const contextMenu = win.document.getElementById(contextMenuId);
+  const contextMenuShown = BrowserTestUtils.waitForPopupEvent(
+    contextMenu,
+    "shown"
+  );
+
+  EventUtils.synthesizeMouseAtCenter(
+    triggerNode,
+    { type: "contextmenu", button: 2 },
+    win
+  );
+  await contextMenuShown;
+  return contextMenu;
 }
 
 /**
- * @param {string} url
- * @returns {Promise<[undefined, string]>}
+ * @param {XULMenuElement|XULPopupElement} contextMenu
+ * @returns {Promise<void>}
  */
-function observeTabNoteEdited(url) {
-  return TestUtils.topicObserved("TabNote:Edited", (_, data) => data == url);
+async function closeContextMenu(contextMenu) {
+  let menuHidden = BrowserTestUtils.waitForPopupEvent(contextMenu, "hidden");
+  contextMenu.hidePopup();
+  await menuHidden;
 }
 
 /**
- * @param {string} url
- * @returns {Promise<[undefined, string]>}
+ * @param {Element} panel
+ * @param {() => Promise<void>} opener
+ * @returns {Promise<Element>}
+ *   The panel element that was opened.
  */
-function observeTabNoteRemoved(url) {
-  return TestUtils.topicObserved("TabNote:Removed", (_, data) => data == url);
+async function openPanel(panel, opener) {
+  let panelShown = BrowserTestUtils.waitForPopupEvent(panel, "shown");
+  Assert.equal(panel.state, "closed", "Panel starts hidden");
+  await Promise.all([opener(), panelShown]);
+  Assert.equal(panel.state, "open", "Panel is now open");
+  return panel;
+}
+
+/**
+ * Open the tab note creation panel by choosing "Add note" from the
+ * tab context menu.
+ *
+ * @param {MozTabbrowserTab} tab
+ * @returns {Promise<Element>}
+ *   `<tabnote-menu>` element.
+ */
+async function openTabNoteMenu(tab) {
+  let tabContextMenu = await getContextMenu(tab, "tabContextMenu");
+  let tabNotePanel = document.getElementById("tabNotePanel");
+  let panelShown = BrowserTestUtils.waitForPopupEvent(tabNotePanel, "shown");
+  tabContextMenu.activateItem(document.getElementById("context_addNote"));
+  await panelShown;
+  return tabNotePanel;
+}
+
+/**
+ * Closes the tab note panel.
+ *
+ * @returns {Promise<Event>}
+ *   `popuphidden` event from closing this menu.
+ */
+function closeTabNoteMenu() {
+  let tabNotePanel = document.getElementById("tabNotePanel");
+  let menuHidden = BrowserTestUtils.waitForPopupEvent(tabNotePanel, "hidden");
+  tabNotePanel.hidePopup();
+  return menuHidden;
 }

@@ -621,6 +621,11 @@ const PREF_SPOC_COUNTS = "discoverystream.placements.spocs.counts";
 const PREF_CONTEXTUAL_ADS_ENABLED = "discoverystream.sections.contextualAds.enabled";
 const PREF_CONTEXTUAL_BANNER_PLACEMENTS = "discoverystream.placements.contextualBanners";
 const PREF_CONTEXTUAL_BANNER_COUNTS = "discoverystream.placements.contextualBanners.counts";
+const PREF_UNIFIED_ADS_ENABLED = "unifiedAds.spocs.enabled";
+const PREF_UNIFIED_ADS_ENDPOINT = "unifiedAds.endpoint";
+const PREF_ALLOWED_ENDPOINTS = "discoverystream.endpoints";
+const PREF_OHTTP_CONFIG = "discoverystream.ohttp.configURL";
+const PREF_OHTTP_RELAY = "discoverystream.ohttp.relayURL";
 const Row = props => /*#__PURE__*/external_React_default().createElement("tr", _extends({
   className: "message-item"
 }, props), props.children);
@@ -719,6 +724,7 @@ class DiscoveryStreamAdminUI extends (external_React_default()).PureComponent {
     this.refreshTopicSelectionCache = this.refreshTopicSelectionCache.bind(this);
     this.handleSectionsToggle = this.handleSectionsToggle.bind(this);
     this.toggleIABBanners = this.toggleIABBanners.bind(this);
+    this.handleAllizomToggle = this.handleAllizomToggle.bind(this);
     this.sendConversionEvent = this.sendConversionEvent.bind(this);
     this.state = {
       toggledStories: {},
@@ -983,25 +989,71 @@ class DiscoveryStreamAdminUI extends (external_React_default()).PureComponent {
       }, key));
     }))));
   }
+  handleAllizomToggle(e) {
+    const prefs = this.props.otherPrefs;
+    const unifiedAdsSpocsEnabled = prefs[PREF_UNIFIED_ADS_ENABLED];
+    if (!unifiedAdsSpocsEnabled) {
+      return;
+    }
+    const {
+      pressed
+    } = e.target;
+    const {
+      dispatch
+    } = this.props;
+    const allowedEndpoints = prefs[PREF_ALLOWED_ENDPOINTS];
+    const setPref = (pref = "", value = "") => {
+      dispatch(actionCreators.SetPref(pref, value));
+    };
+    const clearPref = (pref = "") => {
+      dispatch(actionCreators.OnlyToMain({
+        type: actionTypes.CLEAR_PREF,
+        data: {
+          name: pref
+        }
+      }));
+    };
+    if (pressed) {
+      setPref(PREF_UNIFIED_ADS_ENDPOINT, "https://ads.allizom.org/");
+      setPref(PREF_ALLOWED_ENDPOINTS, `${allowedEndpoints},https://ads.allizom.org/`);
+      setPref(PREF_OHTTP_CONFIG, "https://stage.ohttp-gateway.nonprod.webservices.mozgcp.net/ohttp-configs");
+      setPref(PREF_OHTTP_RELAY, "https://mozilla-ohttp-relay-test.edgecompute.app/");
+    } else {
+      clearPref(PREF_UNIFIED_ADS_ENDPOINT);
+      clearPref(PREF_ALLOWED_ENDPOINTS);
+      clearPref(PREF_OHTTP_CONFIG);
+      clearPref(PREF_OHTTP_RELAY);
+    }
+  }
   renderSpocs() {
     const {
       spocs
     } = this.props.state.DiscoveryStream;
-    const unifiedAdsSpocsEnabled = this.props.otherPrefs["unifiedAds.spocs.enabled"];
+    const unifiedAdsSpocsEnabled = this.props.otherPrefs[PREF_UNIFIED_ADS_ENABLED];
 
     // Determine which mechanism is querying the UAPI ads server
     const PREF_UNIFIED_ADS_ADSFEED_ENABLED = "unifiedAds.adsFeed.enabled";
     const adsFeedEnabled = this.props.otherPrefs[PREF_UNIFIED_ADS_ADSFEED_ENABLED];
-    const unifiedAdsEndpoint = this.props.otherPrefs["unifiedAds.endpoint"];
+    const unifiedAdsEndpoint = this.props.otherPrefs[PREF_UNIFIED_ADS_ENDPOINT];
+    const spocsEndpoint = unifiedAdsSpocsEnabled ? unifiedAdsEndpoint : spocs.spocs_endpoint;
     let spocsData = [];
+    let allizomEnabled = spocsEndpoint?.includes("allizom");
     if (spocs.data && spocs.data.newtab_spocs && spocs.data.newtab_spocs.items) {
       spocsData = spocs.data.newtab_spocs.items || [];
     }
     return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
+      colSpan: "2"
+    }, /*#__PURE__*/external_React_default().createElement("moz-toggle", {
+      id: "sections-toggle",
+      disabled: !unifiedAdsSpocsEnabled || null,
+      pressed: allizomEnabled || null,
+      onToggle: this.handleAllizomToggle,
+      label: "Toggle allizom"
+    }))), /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
       className: "min"
     }, "adsfeed enabled"), /*#__PURE__*/external_React_default().createElement("td", null, adsFeedEnabled ? "true" : "false")), /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
       className: "min"
-    }, "spocs_endpoint"), /*#__PURE__*/external_React_default().createElement("td", null, unifiedAdsSpocsEnabled ? unifiedAdsEndpoint : spocs.spocs_endpoint)), /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
+    }, "spocs endpoint"), /*#__PURE__*/external_React_default().createElement("td", null, spocsEndpoint)), /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
       className: "min"
     }, "Data last fetched"), /*#__PURE__*/external_React_default().createElement("td", null, relativeTime(spocs.lastUpdated))))), /*#__PURE__*/external_React_default().createElement("h4", null, "Spoc data"), /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, spocsData.map(spoc => this.renderStoryData(spoc)))), /*#__PURE__*/external_React_default().createElement("h4", null, "Spoc frequency caps"), /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, spocs.frequency_caps.map(spoc => this.renderStoryData(spoc)))));
   }
@@ -1249,6 +1301,22 @@ class _ConfirmDialog extends (external_React_default()).PureComponent {
     super(props);
     this._handleCancelBtn = this._handleCancelBtn.bind(this);
     this._handleConfirmBtn = this._handleConfirmBtn.bind(this);
+    this.dialogRef = /*#__PURE__*/external_React_default().createRef();
+  }
+  componentDidUpdate() {
+    const dialogElement = this.dialogRef.current;
+    if (!dialogElement) {
+      return;
+    }
+
+    // Open dialog when visible becomes true
+    if (this.props.visible && !dialogElement.open) {
+      dialogElement.showModal();
+    }
+    // Close dialog when visible becomes false
+    else if (!this.props.visible && dialogElement.open) {
+      dialogElement.close();
+    }
   }
   _handleCancelBtn() {
     this.props.dispatch({
@@ -1273,32 +1341,32 @@ class _ConfirmDialog extends (external_React_default()).PureComponent {
     })));
   }
   render() {
-    if (!this.props.visible) {
-      return null;
-    }
-    return /*#__PURE__*/external_React_default().createElement("div", {
-      className: "confirmation-dialog"
+    return /*#__PURE__*/external_React_default().createElement("dialog", {
+      ref: this.dialogRef,
+      className: "confirmation-dialog",
+      onClick: e => {
+        // Close modal when clicking on the backdrop pseudo element (the background of the modal)
+        if (e.target === this.dialogRef.current) {
+          this._handleCancelBtn();
+        }
+      }
     }, /*#__PURE__*/external_React_default().createElement("div", {
-      className: "modal-overlay",
-      onClick: this._handleCancelBtn,
-      role: "presentation"
-    }), /*#__PURE__*/external_React_default().createElement("div", {
       className: "modal"
     }, /*#__PURE__*/external_React_default().createElement("section", {
       className: "modal-message"
     }, this.props.data.icon && /*#__PURE__*/external_React_default().createElement("span", {
       className: `icon icon-spacer icon-${this.props.data.icon}`
     }), this._renderModalMessage()), /*#__PURE__*/external_React_default().createElement("section", {
-      className: "actions"
-    }, /*#__PURE__*/external_React_default().createElement("button", {
+      className: "button-group"
+    }, /*#__PURE__*/external_React_default().createElement("moz-button-group", null, /*#__PURE__*/external_React_default().createElement("moz-button", {
       onClick: this._handleCancelBtn,
       "data-l10n-id": this.props.data.cancel_button_string_id
-    }), /*#__PURE__*/external_React_default().createElement("button", {
-      className: "done",
+    }), /*#__PURE__*/external_React_default().createElement("moz-button", {
+      type: "primary",
       onClick: this._handleConfirmBtn,
       "data-l10n-id": this.props.data.confirm_button_string_id,
       "data-l10n-args": JSON.stringify(this.props.data.confirm_button_string_args)
-    }))));
+    })))));
   }
 }
 const ConfirmDialog = (0,external_ReactRedux_namespaceObject.connect)(state => state.Dialog)(_ConfirmDialog);
@@ -2907,7 +2975,8 @@ class ImpressionStats_ImpressionStats extends (external_React_default()).PureCom
               advertiser: card.advertiser,
               // Keep the 0-based position, can be adjusted by the telemetry
               // sender if necessary.
-              position: card.pos
+              position: card.pos,
+              attribution: card.attribution
             }
           }));
         }
@@ -2933,6 +3002,7 @@ class ImpressionStats_ImpressionStats extends (external_React_default()).PureCom
           received_rank: link.received_rank,
           topic: link.topic,
           features: link.features,
+          attribution: link.attribution,
           ...(link.format ? {
             format: link.format
           } : {
@@ -3634,6 +3704,7 @@ class _DSCard extends (external_React_default()).PureComponent {
           features: this.props.features,
           matches_selected_topic: matchesSelectedTopic,
           selected_topics: this.props.selectedTopics,
+          attribution: this.props.attribution,
           ...(this.props.format ? {
             format: this.props.format
           } : {
@@ -3951,6 +4022,7 @@ class _DSCard extends (external_React_default()).PureComponent {
           format
         } : {}),
         category: this.props.category,
+        attribution: this.props.attribution,
         ...(this.props.section ? {
           section: this.props.section,
           section_position: this.props.sectionPosition,
@@ -4271,7 +4343,7 @@ const TopicsWidget = (0,external_ReactRedux_namespaceObject.connect)(state => ({
  * @param type
  * @param showAdReporting
  * @returns {Element}
- * @constructor
+ * @class
  */
 function AdBannerContextMenu({
   dispatch,
@@ -4477,7 +4549,7 @@ const PREF_PROMOCARD_VISIBLE = "discoverystream.promoCard.visible";
  * @param type
  * @param prefs
  * @returns {Element}
- * @constructor
+ * @class
  */
 const AdBanner = ({
   spoc,
@@ -4790,7 +4862,8 @@ class _CardGrid extends (external_React_default()).PureComponent {
           alt_text: rec.alt_text,
           isTimeSensitive: rec.isTimeSensitive,
           tabIndex: currentCardIndex === this.state.focusedIndex ? 0 : -1,
-          onFocus: () => this.onCardFocus(currentCardIndex)
+          onFocus: () => this.onCardFocus(currentCardIndex),
+          attribution: rec.attribution
         }));
       }
     }
@@ -5381,7 +5454,17 @@ const ReportContent = spocs => {
   }), /*#__PURE__*/external_React_default().createElement("moz-radio", {
     "data-l10n-id": "newtab-report-content-spam-misleading",
     value: "spam_or_misleading"
-  }))), /*#__PURE__*/external_React_default().createElement("moz-button-group", null, /*#__PURE__*/external_React_default().createElement("moz-button", {
+  }), /*#__PURE__*/external_React_default().createElement("moz-radio", {
+    "data-l10n-id": "newtab-report-content-requires-payment-subscription",
+    value: "requires_payment_or_subscription"
+  }, /*#__PURE__*/external_React_default().createElement("a", {
+    slot: "support-link",
+    is: "moz-support-link",
+    "support-page": "recommendations-firefox-new-tab#w_what-is-a-paywall",
+    "data-l10n-id": "newtab-report-content-requires-payment-subscription-learn-more",
+    rel: "noreferrer",
+    target: "_blank"
+  })))), /*#__PURE__*/external_React_default().createElement("moz-button-group", null, /*#__PURE__*/external_React_default().createElement("moz-button", {
     "data-l10n-id": "newtab-report-cancel",
     onClick: handleCancel,
     className: "cancel-report-btn"
@@ -5827,7 +5910,7 @@ _PerfService.prototype = {
    * Used to ensure that timestamps from the add-on code and the content code
    * are comparable.
    *
-   * @note If this is called from a context without a window
+   * Note: If this is called from a context without a window
    * (eg a JSM in chrome), it will return the timeOrigin of the XUL hidden
    * window, which appears to be the first created window (and thus
    * timeOrigin) in the browser.  Note also, however, there is also a private
@@ -5862,7 +5945,7 @@ _PerfService.prototype = {
    *
    * @throws {Error}        "No Marks with the name ..." if none are available
    *
-   * @note Always surround calls to this by try/catch.  Otherwise your code
+   * Note: Always surround calls to this by try/catch.  Otherwise your code
    * may fail when the `privacy.resistFingerprinting` pref is true.  When
    * this pref is set, all attempts to get marks will likely fail, which will
    * cause this method to throw.
@@ -5923,7 +6006,7 @@ class ComponentPerfTimer extends (external_React_default()).Component {
   /**
    * Call the given callback after the upcoming frame paints.
    *
-   * @note Both setTimeout and requestAnimationFrame are throttled when the page
+   * Note: Both setTimeout and requestAnimationFrame are throttled when the page
    * is hidden, so this callback may get called up to a second or so after the
    * requestAnimationFrame "paint" for hidden tabs.
    *
@@ -6068,8 +6151,6 @@ class MoreRecommendations extends (external_React_default()).PureComponent {
 
 
 function ModalOverlayWrapper({
-  // eslint-disable-next-line no-shadow
-  document = globalThis.document,
   unstyled,
   innerClassName,
   onClose,
@@ -6077,37 +6158,40 @@ function ModalOverlayWrapper({
   headerId,
   id
 }) {
-  const modalRef = (0,external_React_namespaceObject.useRef)(null);
-  let className = unstyled ? "" : "modalOverlayInner active";
+  const dialogRef = (0,external_React_namespaceObject.useRef)(null);
+  let className = unstyled ? "" : "modalOverlayInner";
   if (innerClassName) {
     className += ` ${innerClassName}`;
   }
-
-  // The intended behaviour is to listen for an escape key
-  // but not for a click; see Bug 1582242
-  const onKeyDown = (0,external_React_namespaceObject.useCallback)(event => {
-    if (event.key === "Escape") {
-      onClose(event);
-    }
-  }, [onClose]);
   (0,external_React_namespaceObject.useEffect)(() => {
-    document.addEventListener("keydown", onKeyDown);
-    document.body.classList.add("modal-open");
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.classList.remove("modal-open");
+    const dialogElement = dialogRef.current;
+    if (dialogElement && !dialogElement.open) {
+      dialogElement.showModal();
+    }
+    const handleCancel = e => {
+      e.preventDefault();
+      onClose(e);
     };
-  }, [document, onKeyDown]);
-  return /*#__PURE__*/external_React_default().createElement("div", {
-    className: "modalOverlayOuter active",
-    onKeyDown: onKeyDown,
-    role: "presentation"
+    dialogElement?.addEventListener("cancel", handleCancel);
+    return () => {
+      dialogElement?.removeEventListener("cancel", handleCancel);
+      if (dialogElement && dialogElement.open) {
+        dialogElement.close();
+      }
+    };
+  }, [onClose]);
+  return /*#__PURE__*/external_React_default().createElement("dialog", {
+    ref: dialogRef,
+    className: "modalOverlayOuter",
+    onClick: e => {
+      if (e.target === dialogRef.current) {
+        onClose(e);
+      }
+    }
   }, /*#__PURE__*/external_React_default().createElement("div", {
     className: className,
     "aria-labelledby": headerId,
-    id: id,
-    role: "dialog",
-    ref: modalRef
+    id: id
   }, children));
 }
 
@@ -8331,7 +8415,8 @@ class TopSiteLink extends (external_React_default()).PureComponent {
           advertiser: title.toLocaleLowerCase(),
           source: NEWTAB_SOURCE,
           visible_topsites: visibleTopSites,
-          frecency_boosted: link.type === "frecency-boost"
+          frecency_boosted: link.type === "frecency-boost",
+          attribution: link.attribution
         }
         // For testing.
         ,
@@ -8523,7 +8608,8 @@ class TopSite extends (external_React_default()).PureComponent {
           value: {
             card_type: "spoc",
             tile_id: this.props.link.id,
-            shim: this.props.link.shim && this.props.link.shim.click
+            shim: this.props.link.shim && this.props.link.shim.click,
+            attribution: this.props.link.attribution
           }
         }));
 
@@ -8536,7 +8622,8 @@ class TopSite extends (external_React_default()).PureComponent {
             position: this.props.link.pos,
             tile_id: this.props.link.id,
             advertiser: title.toLocaleLowerCase(),
-            source: NEWTAB_SOURCE
+            source: NEWTAB_SOURCE,
+            attribution: this.props.link.attribution
           }
         }));
       } else if (isSponsored(this.props.link)) {
@@ -8552,7 +8639,8 @@ class TopSite extends (external_React_default()).PureComponent {
             advertiser: title.toLocaleLowerCase(),
             source: NEWTAB_SOURCE,
             visible_topsites: this.props.visibleTopSites,
-            frecency_boosted: this.props.link.type === "frecency-boost"
+            frecency_boosted: this.props.link.type === "frecency-boost",
+            attribution: this.props.link.attribution
           }
         }));
       } else {
@@ -9213,20 +9301,24 @@ class TopSiteForm extends (external_React_default()).PureComponent {
       title: this.state.label
     }))), /*#__PURE__*/external_React_default().createElement("section", {
       className: "actions"
-    }, /*#__PURE__*/external_React_default().createElement("button", {
-      className: "cancel",
-      type: "button",
-      onClick: this.onCancelButtonClick,
-      "data-l10n-id": "newtab-topsites-cancel-button"
-    }), previewMode ? /*#__PURE__*/external_React_default().createElement("button", {
-      className: "done preview",
-      type: "submit",
-      "data-l10n-id": "newtab-topsites-preview-button"
-    }) : /*#__PURE__*/external_React_default().createElement("button", {
-      className: "done",
-      type: "submit",
-      "data-l10n-id": showAsAdd ? "newtab-topsites-add-button" : "newtab-topsites-save-button"
-    })));
+    }, /*#__PURE__*/external_React_default().createElement("moz-button-group", {
+      className: "button-group"
+    }, /*#__PURE__*/external_React_default().createElement("moz-button", {
+      id: "topsites-form-cancel-button",
+      type: "default",
+      "data-l10n-id": "newtab-topsites-cancel-button",
+      onClick: this.onCancelButtonClick
+    }), previewMode ? /*#__PURE__*/external_React_default().createElement("moz-button", {
+      id: "topsites-form-preview-button",
+      type: "primary",
+      "data-l10n-id": "newtab-topsites-preview-button",
+      onClick: this.onPreviewButtonClick
+    }) : /*#__PURE__*/external_React_default().createElement("moz-button", {
+      id: "topsites-form-save-button",
+      type: "primary",
+      "data-l10n-id": showAsAdd ? "newtab-topsites-add-button" : "newtab-topsites-save-button",
+      onClick: this.onDoneButtonClick
+    }))));
   }
 }
 TopSiteForm.defaultProps = {
@@ -11443,7 +11535,8 @@ function CardSection({
       sectionLayoutName: layoutName,
       isTimeSensitive: rec.isTimeSensitive,
       tabIndex: index === focusedIndex ? 0 : -1,
-      onFocus: () => onCardFocus(index)
+      onFocus: () => onCardFocus(index),
+      attribution: rec.attribution
     });
     return [card];
   })));
@@ -14748,46 +14841,6 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
 const CustomizeMenu = (0,external_ReactRedux_namespaceObject.connect)(state => ({
   DiscoveryStream: state.DiscoveryStream
 }))(_CustomizeMenu);
-;// CONCATENATED MODULE: ./content-src/lib/constants.mjs
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-const IS_NEWTAB =
-  globalThis.document && globalThis.document.documentURI === "about:newtab";
-const NEWTAB_DARK_THEME = {
-  ntp_background: {
-    r: 42,
-    g: 42,
-    b: 46,
-    a: 1,
-  },
-  ntp_card_background: {
-    r: 66,
-    g: 65,
-    b: 77,
-    a: 1,
-  },
-  ntp_text: {
-    r: 249,
-    g: 249,
-    b: 250,
-    a: 1,
-  },
-  sidebar: {
-    r: 56,
-    g: 56,
-    b: 61,
-    a: 1,
-  },
-  sidebar_text: {
-    r: 249,
-    g: 249,
-    b: 250,
-    a: 1,
-  },
-};
-
 ;// CONCATENATED MODULE: ./content-src/components/Logo/Logo.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -14813,8 +14866,7 @@ function Logo() {
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* globals ContentSearchUIController, ContentSearchHandoffUIController */
-
+/* globals ContentSearchHandoffUIController */
 
 
 
@@ -14823,11 +14875,9 @@ function Logo() {
 class _Search extends (external_React_default()).PureComponent {
   constructor(props) {
     super(props);
-    this.onSearchClick = this.onSearchClick.bind(this);
     this.onSearchHandoffClick = this.onSearchHandoffClick.bind(this);
     this.onSearchHandoffPaste = this.onSearchHandoffPaste.bind(this);
     this.onSearchHandoffDrop = this.onSearchHandoffDrop.bind(this);
-    this.onInputMount = this.onInputMount.bind(this);
     this.onInputMountHandoff = this.onInputMountHandoff.bind(this);
     this.onSearchHandoffButtonMount = this.onSearchHandoffButtonMount.bind(this);
   }
@@ -14838,9 +14888,6 @@ class _Search extends (external_React_default()).PureComponent {
         event: "SEARCH"
       }));
     }
-  }
-  onSearchClick(event) {
-    window.gContentSearchController.search(event);
   }
   doSearchHandoff(text) {
     this.props.dispatch(actionCreators.OnlyToMain({
@@ -14894,28 +14941,6 @@ class _Search extends (external_React_default()).PureComponent {
       caret.style.setProperty("--caret-blink-time", caretBlinkTime > 0 ? `${caretBlinkTime * 2}ms` : `${1134}ms`);
     }
   }
-  componentWillUnmount() {
-    delete window.gContentSearchController;
-  }
-  onInputMount(input) {
-    if (input) {
-      // The "healthReportKey" and needs to be "newtab" or "abouthome" so that
-      // BrowserUsageTelemetry.sys.mjs knows to handle events with this name, and
-      // can add the appropriate telemetry probes for search. Without the correct
-      // name, certain tests like browser_UsageTelemetry_content.js will fail
-      // (See github ticket #2348 for more details)
-      const healthReportKey = IS_NEWTAB ? "newtab" : "abouthome";
-
-      // gContentSearchController needs to exist as a global so that tests for
-      // the existing about:home can find it; and so it allows these tests to pass.
-      // In the future, when activity stream is default about:home, this can be renamed
-      window.gContentSearchController = new ContentSearchUIController(input, input.parentNode, healthReportKey);
-      addEventListener("ContentSearchClient", this);
-    } else {
-      window.gContentSearchController = null;
-      removeEventListener("ContentSearchClient", this);
-    }
-  }
   onInputMountHandoff(input) {
     if (input) {
       // The handoff UI controller helps us set the search icon and reacts to
@@ -14935,22 +14960,9 @@ class _Search extends (external_React_default()).PureComponent {
    */
   render() {
     const wrapperClassName = ["search-wrapper", this.props.disable && "search-disabled", this.props.fakeFocus && "fake-focus"].filter(v => v).join(" ");
-    return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("div", {
+    return /*#__PURE__*/external_React_default().createElement("div", {
       className: wrapperClassName
-    }, this.props.showLogo && /*#__PURE__*/external_React_default().createElement(Logo, null), !this.props.handoffEnabled && /*#__PURE__*/external_React_default().createElement("div", {
-      className: "search-inner-wrapper no-handoff"
-    }, /*#__PURE__*/external_React_default().createElement("input", {
-      id: "newtab-search-text",
-      "data-l10n-id": "newtab-search-box-input",
-      maxLength: "256",
-      ref: this.onInputMount,
-      type: "search"
-    }), /*#__PURE__*/external_React_default().createElement("button", {
-      id: "searchSubmit",
-      className: "search-button",
-      "data-l10n-id": "newtab-search-box-search-button",
-      onClick: this.onSearchClick
-    })), this.props.handoffEnabled && /*#__PURE__*/external_React_default().createElement("div", {
+    }, this.props.showLogo && /*#__PURE__*/external_React_default().createElement(Logo, null), /*#__PURE__*/external_React_default().createElement("div", {
       className: "search-inner-wrapper"
     }, /*#__PURE__*/external_React_default().createElement("button", {
       className: "search-handoff-button",
@@ -14972,7 +14984,7 @@ class _Search extends (external_React_default()).PureComponent {
       ref: el => {
         this.fakeCaret = el;
       }
-    })))));
+    }))));
   }
 }
 const Search_Search = (0,external_ReactRedux_namespaceObject.connect)(state => ({
@@ -15199,23 +15211,9 @@ function TopicSelection({
     inputRef?.current?.focus();
   }, [inputRef]);
   const handleFocus = (0,external_React_namespaceObject.useCallback)(e => {
-    // this list will have to be updated with other reusable components that get used inside of this modal
-    const tabbableElements = modalRef.current.querySelectorAll('a[href], button, moz-button, input[tabindex="0"]');
-    const [firstTabableEl] = tabbableElements;
-    const lastTabbableEl = tabbableElements[tabbableElements.length - 1];
-    let isTabPressed = e.key === "Tab" || e.keyCode === 9;
-    let isArrowPressed = e.key === "ArrowUp" || e.key === "ArrowDown";
-    if (isTabPressed) {
-      if (e.shiftKey) {
-        if (document.activeElement === firstTabableEl) {
-          lastTabbableEl.focus();
-          e.preventDefault();
-        }
-      } else if (document.activeElement === lastTabbableEl) {
-        firstTabableEl.focus();
-        e.preventDefault();
-      }
-    } else if (isArrowPressed && checkboxWrapperRef.current.contains(document.activeElement)) {
+    const isArrowPressed = e.key === "ArrowUp" || e.key === "ArrowDown";
+    if (isArrowPressed && checkboxWrapperRef.current.contains(document.activeElement)) {
+      e.preventDefault();
       const checkboxElements = checkboxWrapperRef.current.querySelectorAll("input");
       const [firstInput] = checkboxElements;
       const lastInput = checkboxElements[checkboxElements.length - 1];
@@ -15733,9 +15731,20 @@ class BaseContent extends (external_React_default()).PureComponent {
         if (hash === "#customize-topics") {
           this.toggleSectionsMgmtPanel();
         }
+      } else if (this.props.App.customizeMenuVisible) {
+        this.closeCustomizationMenu();
       }
     };
-    this._onHashChange();
+
+    // Using the Performance API to detect page reload vs fresh navigation.
+    // Only open customize menu on fresh navigation, not on page refresh.
+    // See: https://developer.mozilla.org/en-US/docs/Web/API/Performance/getEntriesByType
+    // See: https://developer.mozilla.org/en-US/docs/Web/API/PerformanceEntry/entryType#navigation
+    // See: https://developer.mozilla.org/en-US/docs/Web/API/PerformanceNavigationTiming/type
+    const isReload = globalThis.performance?.getEntriesByType("navigation")[0]?.type === "reload";
+    if (!isReload) {
+      this._onHashChange();
+    }
     globalThis.addEventListener("hashchange", this._onHashChange);
   }
   componentDidUpdate(prevProps) {
@@ -16106,7 +16115,6 @@ class BaseContent extends (external_React_default()).PureComponent {
     let filteredSections = props.Sections.filter(section => section.id !== "topstories");
     const pocketEnabled = prefs["feeds.section.topstories"] && prefs["feeds.system.topstories"];
     const noSectionsEnabled = !prefs["feeds.topsites"] && !pocketEnabled && filteredSections.filter(section => section.enabled).length === 0;
-    const searchHandoffEnabled = prefs["improvesearch.handoffToAwesomebar"];
     const enabledSections = {
       topSitesEnabled: prefs["feeds.topsites"],
       pocketEnabled: prefs["feeds.section.topstories"],
@@ -16192,8 +16200,7 @@ class BaseContent extends (external_React_default()).PureComponent {
     }, prefs.showSearch && /*#__PURE__*/external_React_default().createElement("div", {
       className: "non-collapsible-section"
     }, /*#__PURE__*/external_React_default().createElement(ErrorBoundary, null, /*#__PURE__*/external_React_default().createElement(Search_Search, Base_extends({
-      showLogo: noSectionsEnabled || prefs["logowordmark.alwaysVisible"],
-      handoffEnabled: searchHandoffEnabled
+      showLogo: noSectionsEnabled || prefs["logowordmark.alwaysVisible"]
     }, props.Search)))), !prefs.showSearch && !noSectionsEnabled && /*#__PURE__*/external_React_default().createElement(Logo, null), /*#__PURE__*/external_React_default().createElement("div", {
       className: `body-wrapper${initialized ? " on" : ""}`
     }, isDiscoveryStream ? /*#__PURE__*/external_React_default().createElement(ErrorBoundary, {

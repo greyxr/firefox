@@ -339,13 +339,6 @@ export class UrlbarInput extends HTMLElement {
     // The engine name is not known yet, but update placeholder anyway to
     // reflect value of keyword.enabled or set the searchbar placeholder.
     this._setPlaceholder(null);
-
-    if (this.#isAddressbar) {
-      let searchContainersPref = lazy.UrlbarPrefs.get(
-        "switchTabs.searchAllContainers"
-      );
-      Glean.urlbar.prefSwitchTabsSearchAllContainers.set(searchContainersPref);
-    }
   }
 
   connectedCallback() {
@@ -362,6 +355,10 @@ export class UrlbarInput extends HTMLElement {
   #init() {
     if (!this.controller) {
       this.#initOnce();
+    }
+
+    if (this.sapName == "searchbar") {
+      this.parentNode.setAttribute("overflows", "false");
     }
 
     // Don't attach event listeners if the toolbar is not visible
@@ -454,6 +451,15 @@ export class UrlbarInput extends HTMLElement {
   }
 
   #uninit() {
+    if (this.sapName == "searchbar") {
+      this.parentNode.removeAttribute("overflows");
+
+      // Exit search mode to make sure it doesn't become stale while the
+      // searchbar is invisible. Otherwise, the engine might get deleted
+      // but we don't notice because the search service observer is inactive.
+      this.searchMode = null;
+    }
+
     if (this._copyCutController) {
       this.inputField.controllers.removeController(this._copyCutController);
       delete this._copyCutController;
@@ -709,6 +715,14 @@ export class UrlbarInput extends HTMLElement {
         "Cannot set URI for UrlbarInput that is not an address bar"
       );
     }
+    if (
+      this.window.browsingContext.isDocumentPiP &&
+      uri.spec.startsWith("about:blank")
+    ) {
+      // If this is a Document PiP, its url will be about:blank while
+      // the opener will be a secure context, i.e. no about:blank
+      throw new Error("Document PiP should show its opener URL");
+    }
     // We only need to update the searchModeUI on tab switch conditionally
     // as we only persist searchMode with ScotchBonnet enabled.
     if (
@@ -777,7 +791,7 @@ export class UrlbarInput extends HTMLElement {
       // identity yet. See Bug 1746383.
       valid =
         !dueToSessionRestore &&
-        (!this.window.isBlankPageURL(uri.spec) ||
+        (!this.#canHandleAsBlankPage(uri.spec) ||
           lazy.ExtensionUtils.isExtensionUrl(uri) ||
           isInitialPageControlledByWebContent);
     } else if (
@@ -924,7 +938,7 @@ export class UrlbarInput extends HTMLElement {
 
     if (
       browser != this.window.gBrowser.selectedBrowser &&
-      !this.window.isBlankPageURL(locationURI.spec)
+      !this.#canHandleAsBlankPage(locationURI.spec)
     ) {
       // If the page is loaded on background tab, make Unified Search Button
       // unavailable when back to the tab.
@@ -3533,6 +3547,7 @@ export class UrlbarInput extends HTMLElement {
     // Only add the suffix when the URL bar value isn't already "URL-like",
     // and only if we get a keyboard event, to match user expectations.
     if (
+      this.sapName == "searchbar" ||
       !this.#isCanonizeKeyboardEvent(event) ||
       !/^\s*[^.:\/\s]+(?:\/.*|\s*)$/i.test(value)
     ) {
@@ -3849,7 +3864,7 @@ export class UrlbarInput extends HTMLElement {
       this.inputField.setSelectionRange(0, 0);
     }
 
-    if (openUILinkWhere != "current") {
+    if (openUILinkWhere != "current" && this.sapName != "searchbar") {
       this.handleRevert();
     }
 
@@ -3895,7 +3910,11 @@ export class UrlbarInput extends HTMLElement {
     } else {
       where = lazy.BrowserUtils.whereToOpenLink(event, false, false);
     }
-    if (lazy.UrlbarPrefs.get("openintab")) {
+    let openInTabPref =
+      this.#sapName == "searchbar"
+        ? lazy.UrlbarPrefs.get("browser.search.openintab")
+        : lazy.UrlbarPrefs.get("openintab");
+    if (openInTabPref) {
       if (where == "current") {
         where = "tab";
       } else if (where == "tab") {
@@ -4216,7 +4235,11 @@ export class UrlbarInput extends HTMLElement {
    */
   _searchModeForResult(result, entry = null) {
     // Search mode is determined by the result's keyword or engine.
-    if (!result.payload.keyword && !result.payload.engine) {
+    if (
+      !result.payload.keyword &&
+      !result.payload.engine &&
+      !this.view.selectedElement.dataset?.engine
+    ) {
       return null;
     }
 
@@ -4230,6 +4253,8 @@ export class UrlbarInput extends HTMLElement {
         result.payload.engine == result.payload.originalEngine)
     ) {
       searchMode = { engineName: result.payload.engine };
+    } else if (this.view.selectedElement?.dataset.engine) {
+      searchMode = { engineName: this.view.selectedElement.dataset.engine };
     }
 
     if (searchMode) {
@@ -5625,6 +5650,10 @@ export class UrlbarInput extends HTMLElement {
         event.keyCode == KeyEvent.DOM_VK_META &&
         this._isKeyDownWithMetaAndLeft)
     );
+  }
+
+  #canHandleAsBlankPage(spec) {
+    return this.window.isBlankPageURL(spec) || spec == "about:privatebrowsing";
   }
 }
 

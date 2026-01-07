@@ -2206,6 +2206,11 @@ JS_PUBLIC_API bool js::ShouldIgnorePropertyDefinition(JSContext* cx,
         id == NameToId(cx->names().concat)) {
       return true;
     }
+    if (!JS::Prefs::experimental_joint_iteration() &&
+        (id == NameToId(cx->names().zip) ||
+         id == NameToId(cx->names().zipKeyed))) {
+      return true;
+    }
   }
 
 #ifdef JS_HAS_INTL_API
@@ -2224,9 +2229,9 @@ JS_PUBLIC_API bool js::ShouldIgnorePropertyDefinition(JSContext* cx,
         (id == NameToId(cx->names().range))) {
       return true;
     }
-    if (!JS::Prefs::experimental_joint_iteration() &&
-        (id == NameToId(cx->names().zip) ||
-         id == NameToId(cx->names().zipKeyed))) {
+    if (!JS::Prefs::experimental_promise_allkeyed() &&
+        (id == NameToId(cx->names().allKeyed) ||
+         id == NameToId(cx->names().allSettledKeyed))) {
       return true;
     }
   }
@@ -3195,7 +3200,7 @@ js::gc::AllocKind JSObject::allocKindForTenure(
   if (is<WasmStructObject>()) {
     // Figure out the size of this object, from the object's TypeDef.
     const wasm::TypeDef* typeDef = &as<WasmStructObject>().typeDef();
-    AllocKind kind = WasmStructObject::allocKindForTypeDef(typeDef);
+    AllocKind kind = typeDef->structType().allocKind_;
     return GetFinalizedAllocKindForClass(kind, getClass());
   }
 

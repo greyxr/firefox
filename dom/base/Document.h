@@ -47,6 +47,7 @@
 #include "mozilla/WeakPtr.h"
 #include "mozilla/css/StylePreloadKind.h"
 #include "mozilla/dom/AnimationFrameProvider.h"
+#include "mozilla/dom/AnimationTimelinesController.h"
 #include "mozilla/dom/DocumentOrShadowRoot.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/EventTarget.h"
@@ -270,6 +271,7 @@ class NodeFilter;
 class NodeInfo;
 class NodeIterator;
 enum class OrientationType : uint8_t;
+enum class PopoverAttributeState : uint8_t;
 class ProcessingInstruction;
 class Promise;
 class ScriptLoader;
@@ -1608,6 +1610,7 @@ class Document : public nsINode,
   nsresult InitIntegrityPolicy(nsIChannel* aChannel);
   nsresult InitCOEP(nsIChannel* aChannel);
   nsresult InitDocPolicy(nsIChannel* aChannel);
+  nsresult InitTLSCertificateBinding(nsIChannel* aChannel);
 
   nsresult InitReferrerInfo(nsIChannel* aChannel);
 
@@ -1983,6 +1986,11 @@ class Document : public nsINode,
   MOZ_CAN_RUN_SCRIPT bool TryAutoFocusCandidate(Element& aElement);
 
  public:
+  void SetAncestorOriginsList(nsTArray<nsString>&& aAncestorOriginsList);
+  Span<const nsString> GetAncestorOriginsList() const;
+  // https://html.spec.whatwg.org/#concept-location-ancestor-origins-list
+  already_AddRefed<DOMStringList> AncestorOrigins() const;
+
   // Removes all the elements with fullscreen flag set from the top layer, and
   // clears their fullscreen flag.
   void CleanupFullscreenState();
@@ -2503,6 +2511,9 @@ class Document : public nsINode,
    * Destroy() is only called on documents that have a content viewer.
    */
   virtual void Destroy();
+
+  // https://wicg.github.io/document-picture-in-picture/#close-on-destroy
+  void CloseAnyAssociatedDocumentPiPWindows();
 
   /**
    * Notify the document that its associated DocumentViewer is no longer
@@ -3223,7 +3234,12 @@ class Document : public nsINode,
   using DocumentOrShadowRoot::GetElementsByTagNameNS;
 
   DocumentTimeline* Timeline();
-  LinkedList<DocumentTimeline>& Timelines() { return mTimelines; }
+  const AnimationTimelinesController& TimelinesController() const {
+    return mTimelinesController;
+  }
+  AnimationTimelinesController& TimelinesController() {
+    return mTimelinesController;
+  }
   void UpdateHiddenByContentVisibilityForAnimations();
 
   SVGSVGElement* GetSVGRootElement() const;
@@ -3584,11 +3600,23 @@ class Document : public nsINode,
   MOZ_CAN_RUN_SCRIPT void GetWireframe(bool aIncludeNodes,
                                        Nullable<Wireframe>&);
 
+  // https://html.spec.whatwg.org/#close-entire-popover-list
+  MOZ_CAN_RUN_SCRIPT void CloseEntirePopoverList(PopoverAttributeState aMode,
+                                                 bool aFocusPreviousElement,
+                                                 bool aFireEvents);
+
   // Hides all popovers until the given end point, see
   // https://html.spec.whatwg.org/multipage/popover.html#hide-all-popovers-until
   MOZ_CAN_RUN_SCRIPT void HideAllPopoversUntil(nsINode& aEndpoint,
                                                bool aFocusPreviousElement,
                                                bool aFireEvents);
+
+  // Hides all popovers, until the given end point, see
+  // https://html.spec.whatwg.org/#hide-popover-stack-until
+  MOZ_CAN_RUN_SCRIPT void HidePopoverStackUntil(PopoverAttributeState aMode,
+                                                nsINode& aEndpoint,
+                                                bool aFocusPreviousElement,
+                                                bool aFireEvents);
 
   // Hides the given popover element, see
   // https://html.spec.whatwg.org/multipage/popover.html#hide-popover-algorithm
@@ -3598,18 +3626,15 @@ class Document : public nsINode,
                                       ErrorResult& aRv);
 
   // Returns a list of all the elements in the Document's top layer whose
-  // popover attribute is in the auto state.
+  // popover opened in mode is in the given state.
   // See https://html.spec.whatwg.org/multipage/popover.html#auto-popover-list
-  nsTArray<Element*> AutoPopoverList() const;
+  // See https://html.spec.whatwg.org/#showing-hint-popover-list
+  nsTArray<Element*> PopoverListOf(PopoverAttributeState aMode) const;
 
-  // Return document's auto popover list's last element.
+  // Return document's popover list's last element of a particular mode.
   // See
   // https://html.spec.whatwg.org/multipage/popover.html#topmost-auto-popover
-  Element* GetTopmostAutoPopover() const;
-
-  // Adds/removes an element to/from the auto popover list.
-  void AddToAutoPopoverList(Element&);
-  void RemoveFromAutoPopoverList(Element&);
+  Element* GetTopmostPopoverOf(PopoverAttributeState aMode) const;
 
   void AddPopoverToTopLayer(Element&);
   void RemovePopoverFromTopLayer(Element&);
@@ -3834,12 +3859,7 @@ class Document : public nsINode,
   // call it just before the document loses its window.
   void SendPageUseCounters();
 
-  void RecordASMJSExecutionTime();
-
   void SetUseCounter(UseCounter aUseCounter) {
-    if (aUseCounter == eUseCounter_custom_JS_use_asm) {
-      RecordASMJSExecutionTime();
-    }
     mUseCounters[aUseCounter] = true;
   }
 
@@ -5315,6 +5335,8 @@ class Document : public nsINode,
  private:
   nsCString mContentType;
 
+  nsTArray<nsString> mAncestorOriginsList;
+
  protected:
   // The document's security info
   nsCOMPtr<nsITransportSecurityInfo> mSecurityInfo;
@@ -5322,9 +5344,6 @@ class Document : public nsINode,
   // The channel that failed to load and resulted in an error page.
   // This only applies to error pages. Might be null.
   nsCOMPtr<nsIChannel> mFailedChannel;
-
-  // Timer for delayed ASMJS execution time recording
-  nsCOMPtr<nsITimer> mASMJSExecutionTimer;
 
   // if this document is part of a multipart document,
   // the ID can be used to distinguish it from the other parts.
@@ -5554,8 +5573,11 @@ class Document : public nsINode,
   // A set of responsive images keyed by address pointer.
   nsTHashSet<HTMLImageElement*> mResponsiveContent;
 
+  // The default document timeline associated to this document.
   RefPtr<DocumentTimeline> mDocumentTimeline;
-  LinkedList<DocumentTimeline> mTimelines;
+  // The timeline controller which holds the timelines attached to this
+  // document.
+  AnimationTimelinesController mTimelinesController;
 
   RefPtr<dom::ScriptLoader> mScriptLoader;
 
@@ -5755,6 +5777,8 @@ class Document : public nsINode,
   RefPtr<class FragmentDirective> mFragmentDirective;
   UniquePtr<RadioGroupContainer> mRadioGroupContainer;
 
+  nsCOMPtr<nsIURI> mTLSCertificateBindingURI;
+
  public:
   // Needs to be public because the bindings code pokes at it.
   JS::ExpandoAndGeneration mExpandoAndGeneration;
@@ -5777,6 +5801,10 @@ class Document : public nsINode,
                                               const nsAString& aHTML,
                                               const SetHTMLOptions& aOptions,
                                               ErrorResult& aError);
+
+  nsIURI* GetTlsCertificateBindingURI() const {
+    return mTLSCertificateBindingURI;
+  }
 };
 
 enum class SyncOperationBehavior { eSuspendInput, eAllowInput };

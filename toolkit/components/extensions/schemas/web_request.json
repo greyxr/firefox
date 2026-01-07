@@ -457,6 +457,18 @@
         ]
       },
       {
+        "name": "handleCredentialReplacement",
+        "type": "function",
+        "description": "test endpoint",
+        "async": true,
+        "parameters": [
+          {
+            "type": "string",
+            "name": "actualCredential"
+          }
+        ]
+      },
+      {
         "name": "filterResponseData",
         "permissions": ["webRequestBlocking"],
         "type": "function",

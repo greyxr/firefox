@@ -16,6 +16,17 @@ console.log("=== WebRequest Debug ===");
 // console.log("Available WebRequest keys:", Object.keys(WebRequest));
 console.log("========================");
 
+console.log("Here")
+
+const { classes: Cc, interfaces: Ci } = Components;
+
+console.log("Calling network method...");
+let config = Cc["@mozilla.org/network/protocol;1?name=http"]
+               .getService(Ci.nsIWebRequestConfig);
+console.log("Got config", config);
+config.setDebugInfo("some debug string");
+console.log("After setDebugInfo");
+
 var { parseMatchPatterns, DefaultMap } = ExtensionUtils;
 
 const MAX_HANDLER_BEHAVIOR_CHANGED_CALLS_PER_10_MINUTES = 20;
@@ -257,6 +268,11 @@ this.webRequest = class extends ExtensionAPIPersistent {
 
           ChromeUtils.clearResourceCache({ target: "content" });
         },
+        handleCredentialReplacement: (actualCredential) => {
+          let nonce = "testNonce";
+          console.log("Done")
+          return;
+        }
       },
     };
   }

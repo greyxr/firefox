@@ -133,6 +133,8 @@
 #define UA_PREF(_pref) UA_PREF_PREFIX _pref
 #define HTTP_PREF(_pref) HTTP_PREF_PREFIX _pref
 #define BROWSER_PREF(_pref) BROWSER_PREF_PREFIX _pref
+#define MYLOG(args) MOZ_LOG(gMyLog, mozilla::LogLevel::Debug, args)
+
 
 #define NS_HTTP_PROTOCOL_FLAGS \
   (URI_STD | ALLOWS_PROXY | ALLOWS_PROXY_HTTP | URI_LOADABLE_BY_ANYONE)
@@ -145,6 +147,8 @@ namespace mozilla::net {
 
 LazyLogModule gHttpLog("nsHttp");
 LazyLogModule gHttpIOLog("HttpIO");
+static mozilla::LazyLogModule gMyLog("my-on-modify-request");
+
 
 #ifdef ANDROID
 static nsCString GetDeviceModelId() {
@@ -882,8 +886,9 @@ nsresult nsHttpHandler::GetIOService(nsIIOService** result) {
 }
 
 void nsHttpHandler::NotifyObservers(nsIChannel* chan, const char* event) {
-  LOG(("nsHttpHandler::NotifyObservers [this=%p chan=%p event=\"%s\"]\n", this,
-       chan, event));
+  // MYLOG(("Before on-modify-request\n"));
+  // MYLOG(("nsHttpHandler::NotifyObservers [this=%p chan=%p event=\"%s\"]\n", this,
+     //  chan, event));
   nsCOMPtr<nsIObserverService> obsService = services::GetObserverService();
   if (obsService) obsService->NotifyObservers(chan, event, nullptr);
 }
@@ -2123,7 +2128,7 @@ nsresult nsHttpHandler::SetAcceptEncodings(const char* aAcceptEncodings,
 
 NS_IMPL_ISUPPORTS(nsHttpHandler, nsIHttpProtocolHandler,
                   nsIProxiedProtocolHandler, nsIProtocolHandler, nsIObserver,
-                  nsISupportsWeakReference, nsISpeculativeConnect)
+                  nsISupportsWeakReference, nsISpeculativeConnect, nsIWebRequestConfig)
 
 //-----------------------------------------------------------------------------
 // nsHttpHandler::nsIProtocolHandler
@@ -2195,8 +2200,11 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
   LOG(("nsHttpHandler::NewProxiedChannel [proxyInfo=%p]\n", givenProxyInfo));
 
   if (IsNeckoChild()) {
+    
+    MYLOG(("creating channel child"));
     httpChannel = new HttpChannelChild();
   } else {
+    MYLOG(("creating channel parent"));
     // HACK: make sure PSM gets initialized on the main thread.
     net_EnsurePSMInit();
     httpChannel = new nsHttpChannel();
@@ -2545,6 +2553,7 @@ nsresult nsHttpHandler::SpeculativeConnectInternal(
       nsPrintfCString debugHashKey("%s", ci->HashKey().get());
       obsService->NotifyObservers(nullptr, "speculative-connect-request",
                                   NS_ConvertUTF8toUTF16(debugHashKey).get());
+      MYLOG(("Notified in SpeculativeConnectInternal"));
       for (auto* cp :
            dom::ContentParent::AllProcesses(dom::ContentParent::eLive)) {
         PNeckoParent* neckoParent =
@@ -2569,6 +2578,15 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
                                   bool aAnonymous) {
   return SpeculativeConnectInternal(aURI, aPrincipal, Nothing(), aCallbacks,
                                     aAnonymous);
+}
+
+NS_IMETHODIMP
+nsHttpHandler::SetDebugInfo(const nsACString& aInfo)
+{
+  MYLOG(("Setting debug info..."));
+  mDebugInfoFromWebRequest = aInfo;
+  MYLOG(("Set debug info %s", mDebugInfoFromWebRequest.get()));
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsHttpHandler::SpeculativeConnectWithOriginAttributes(

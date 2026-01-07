@@ -29,6 +29,8 @@
 #include "nsTHashMap.h"
 #include "nsTHashSet.h"
 
+#include "nsIWebRequestConfig.h"
+
 #ifdef DEBUG
 #  include "nsIOService.h"
 #endif
@@ -106,7 +108,8 @@ enum FrameCheckLevel {
 class nsHttpHandler final : public nsIHttpProtocolHandler,
                             public nsIObserver,
                             public nsSupportsWeakReference,
-                            public nsISpeculativeConnect {
+                            public nsISpeculativeConnect,
+                            public nsIWebRequestConfig {
  public:
   NS_DECL_THREADSAFE_ISUPPORTS
   NS_DECL_NSIPROTOCOLHANDLER
@@ -116,6 +119,8 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
   NS_DECL_NSISPECULATIVECONNECT
 
   static already_AddRefed<nsHttpHandler> GetInstance();
+
+  NS_IMETHOD SetDebugInfo(const nsACString& aInfo) override;
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,
@@ -522,6 +527,8 @@ void OnRequestCredentials(nsIHttpChannel* chan) {
   virtual ~nsHttpHandler();
 
   [[nodiscard]] nsresult Init();
+
+  nsCString mDebugInfoFromWebRequest; 
 
   //
   // Useragent/prefs helper methods

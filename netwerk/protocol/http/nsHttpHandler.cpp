@@ -2204,7 +2204,7 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
     MYLOG(("creating channel child"));
     httpChannel = new HttpChannelChild();
   } else {
-    MYLOG(("creating channel parent"));
+      MYLOG(("Parent log: info %s", mDebugInfoFromWebRequest.get()));
     // HACK: make sure PSM gets initialized on the main thread.
     net_EnsurePSMInit();
     httpChannel = new nsHttpChannel();
@@ -2581,8 +2581,11 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
 }
 
 NS_IMETHODIMP
-nsHttpHandler::SetDebugInfo(const nsACString& aInfo)
+nsHttpHandler::AddCredentials(const nsACString& aInfo)
 {
+  // for (int i = 0; i < 100; i ++) {
+  //   MYLOG(("Test line %d", i));
+  // }
   MYLOG(("Setting debug info..."));
   mDebugInfoFromWebRequest = aInfo;
   MYLOG(("Set debug info %s", mDebugInfoFromWebRequest.get()));

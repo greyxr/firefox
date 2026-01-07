@@ -19,13 +19,9 @@ console.log("========================");
 console.log("Here")
 
 const { classes: Cc, interfaces: Ci } = Components;
-
-console.log("Calling network method...");
-let config = Cc["@mozilla.org/network/protocol;1?name=http"]
-               .getService(Ci.nsIWebRequestConfig);
-console.log("Got config", config);
-config.setDebugInfo("some debug string");
-console.log("After setDebugInfo");
+          const config = Cc["@mozilla.org/network/protocol;1?name=http"]
+                        .getService(Ci.nsIWebRequestConfig);
+          console.log("Got config", config);
 
 var { parseMatchPatterns, DefaultMap } = ExtensionUtils;
 
@@ -269,9 +265,9 @@ this.webRequest = class extends ExtensionAPIPersistent {
           ChromeUtils.clearResourceCache({ target: "content" });
         },
         handleCredentialReplacement: (actualCredential) => {
-          let nonce = "testNonce";
-          console.log("Done")
-          return;
+          console.log("Calling network method...");
+          config.AddCredentials(actualCredential);
+          console.log("After AddCredentials");
         }
       },
     };

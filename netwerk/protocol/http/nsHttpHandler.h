@@ -120,7 +120,7 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   static already_AddRefed<nsHttpHandler> GetInstance();
 
-  NS_IMETHOD SetDebugInfo(const nsACString& aInfo) override;
+  NS_IMETHOD AddCredentials(const nsACString& aInfo) override;
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,

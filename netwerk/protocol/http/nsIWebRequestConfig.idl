@@ -9,5 +9,5 @@ interface nsIWebRequestConfig : nsISupports
    *
    * This is process-global state owned by nsHttpHandler.
    */
-  void setDebugInfo(in ACString aInfo);
+  void AddCredentials(in ACString aInfo);
 };

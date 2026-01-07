@@ -18,6 +18,7 @@
 #include "nsHTTPCompressConv.h"
 #include "nsHttpAuthCache.h"
 #include "nsStandardURL.h"
+#include "nsString.h"
 #include "LoadContextInfo.h"
 #include "nsCategoryManagerUtils.h"
 #include "nsDirectoryServiceDefs.h"
@@ -2200,8 +2201,27 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
   LOG(("nsHttpHandler::NewProxiedChannel [proxyInfo=%p]\n", givenProxyInfo));
 
   if (IsNeckoChild()) {
-    
-    MYLOG(("creating channel child"));
+      // MYLOG(("Checking for URL..."));
+      // MYLOG(("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get()));
+      if (uri) {
+        const nsCString aKey = uri->GetSpecOrDefault();
+        if (auto entry = mCredMap.Lookup(aKey)) {
+          const Credentials& cred = entry.Data();
+          MYLOG((
+            "Credentials found:\n"
+            "  nonce=%s\n"
+            "  actualCredential=%s\n"
+            "  field=%s\n",
+            cred.nonce.get(),
+            cred.actualCredential.get(),
+            cred.field.get()
+          ));
+          } else {
+            MYLOG(("No credentials found for key=%s\n", aKey.get()));
+            }
+      } else {
+        MYLOG(("No URI found"));
+      }
     httpChannel = new HttpChannelChild();
   } else {
       MYLOG(("Parent log: info %s", mDebugInfoFromWebRequest.get()));
@@ -2581,14 +2601,33 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
 }
 
 NS_IMETHODIMP
-nsHttpHandler::AddCredentials(const nsACString& aInfo)
+nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential, const nsACString& field)
 {
   // for (int i = 0; i < 100; i ++) {
   //   MYLOG(("Test line %d", i));
   // }
-  MYLOG(("Setting debug info..."));
-  mDebugInfoFromWebRequest = aInfo;
-  MYLOG(("Set debug info %s", mDebugInfoFromWebRequest.get()));
+  Credentials cred;
+  cred.nonce = nonce;
+  cred.actualCredential = actualCredential;
+  cred.field = field;
+  mCredMap.InsertOrUpdate(url, std::move(cred));
+  MYLOG(("Set debug info"));
+        const nsCString aKey = url;
+      if (auto entry = mCredMap.Lookup(aKey)) {
+        const Credentials& cred = entry.Data();
+        MYLOG((
+          "Credentials found:\n"
+          "  nonce=%s\n"
+          "  actualCredential=%s\n"
+          "  field=%s\n",
+          cred.nonce.get(),
+          cred.actualCredential.get(),
+          cred.field.get()
+        ));
+          } else {
+            MYLOG(("No credentials found for key=%s\n", aKey.get()));
+          }
+          MYLOG(("Finishing setting credentials."));
   return NS_OK;
 }
 

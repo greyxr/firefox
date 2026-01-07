@@ -101,6 +101,12 @@ enum FrameCheckLevel {
   FRAMECHECK_STRICT
 };
 
+struct Credentials {
+  nsCString nonce;
+  nsCString actualCredential;
+  nsCString field;
+};
+
 //-----------------------------------------------------------------------------
 // nsHttpHandler - protocol handler for HTTP and HTTPS
 //-----------------------------------------------------------------------------
@@ -120,7 +126,7 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   static already_AddRefed<nsHttpHandler> GetInstance();
 
-  NS_IMETHOD AddCredentials(const nsACString& aInfo) override;
++  NS_IMETHOD AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential, const nsACString& field) override;
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,
@@ -528,7 +534,7 @@ void OnRequestCredentials(nsIHttpChannel* chan) {
 
   [[nodiscard]] nsresult Init();
 
-  nsCString mDebugInfoFromWebRequest; 
+  nsTHashMap<nsCStringHashKey, Credentials> mCredMap; 
 
   //
   // Useragent/prefs helper methods

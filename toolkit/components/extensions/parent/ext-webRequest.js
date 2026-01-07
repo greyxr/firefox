@@ -266,7 +266,7 @@ this.webRequest = class extends ExtensionAPIPersistent {
         },
         handleCredentialReplacement: (actualCredential) => {
           console.log("Calling network method...");
-          config.AddCredentials(actualCredential);
+          config.AddCredentials("testUrl", "testNonce", "testCredential", "testField");
           console.log("After AddCredentials");
         }
       },

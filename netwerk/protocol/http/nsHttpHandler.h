@@ -126,7 +126,7 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   static already_AddRefed<nsHttpHandler> GetInstance();
 
-+  NS_IMETHOD AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential, const nsACString& field) override;
+  NS_IMETHOD AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential, const nsACString& field) override;
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,

@@ -2224,7 +2224,7 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
       }
     httpChannel = new HttpChannelChild();
   } else {
-      MYLOG(("Parent log: info %s", mDebugInfoFromWebRequest.get()));
+      // MYLOG(("Parent log: info %s", mDebugInfoFromWebRequest.get()));
     // HACK: make sure PSM gets initialized on the main thread.
     net_EnsurePSMInit();
     httpChannel = new nsHttpChannel();
@@ -2612,22 +2612,22 @@ nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, co
   cred.field = field;
   mCredMap.InsertOrUpdate(url, std::move(cred));
   MYLOG(("Set debug info"));
-        const nsCString aKey = url;
-      if (auto entry = mCredMap.Lookup(aKey)) {
-        const Credentials& cred = entry.Data();
-        MYLOG((
-          "Credentials found:\n"
-          "  nonce=%s\n"
-          "  actualCredential=%s\n"
-          "  field=%s\n",
-          cred.nonce.get(),
-          cred.actualCredential.get(),
-          cred.field.get()
-        ));
-          } else {
-            MYLOG(("No credentials found for key=%s\n", aKey.get()));
-          }
-          MYLOG(("Finishing setting credentials."));
+  //       const nsACString aKey = url;
+  //     if (auto entry = mCredMap.Lookup(aKey)) {
+  //       const Credentials& cred = entry.Data();
+  //       MYLOG((
+  //         "Credentials found:\n"
+  //         "  nonce=%s\n"
+  //         "  actualCredential=%s\n"
+  //         "  field=%s\n",
+  //         cred.nonce.get(),
+  //         cred.actualCredential.get(),
+  //         cred.field.get()
+  //       ));
+  //         } else {
+  //           MYLOG(("No credentials found for key=%s\n", aKey.get()));
+  //         }
+  //         MYLOG(("Finishing setting credentials."));
   return NS_OK;
 }
 

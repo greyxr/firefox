@@ -128,6 +128,8 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   NS_IMETHOD AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential, const nsACString& field) override;
 
+  nsresult ReplaceNonce(nsIHttpChannel* chan, nsACString& url);
+
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,
       bool aSecure, nsHttpChannel* aChan, void (*aSuspend)(nsHttpChannel*),

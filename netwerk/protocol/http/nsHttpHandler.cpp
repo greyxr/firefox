@@ -94,6 +94,13 @@
 
 #include <bitset>
 
+#include "jsapi.h"
+#include "js/CompilationAndEvaluation.h"
+#include "js/SourceText.h"
+#include "mozilla/dom/ScriptSettings.h"
+#include "js/JSON.h"
+#include "js/RootingAPI.h"
+
 #if defined(XP_UNIX)
 #  include <sys/utsname.h>
 #endif
@@ -3159,6 +3166,149 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
   (void)mActivityDistributor->ObserveActivityWithArgs(
       aArgs, aActivityType, aActivitySubtype, aTimestamp, aExtraSizeData,
       aExtraStringData);
+}
+
+// The return for this function likely needs to be something else
+//  if there is an error then the calling function needs to handle it properly 
+nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
+  nsCOMPtr<nsIUploadChannel> uploadChannel = do_QueryInterface(chan);
+  if (!uploadChannel) {
+    MYLOG(("nsHttpHandler: invalid channel"));
+    return NS_OK;
+  }
+
+  nsCOMPtr<nsIInputStream> uploadStream;
+  uploadChannel->GetUploadStream(getter_AddRefs(uploadStream));
+  if (!uploadStream) {
+    MYLOG(("nsHttpHandler: invalid stream"));
+    return NS_OK;
+  }
+
+  // Check if stream can be copied
+  nsCOMPtr<nsICloneableInputStream> cloneable = do_QueryInterface(uploadStream);
+  if (!cloneable) {
+    MYLOG(("nsHttpHandler: not cloneable"));
+    return NS_OK;
+  }
+  nsCOMPtr<nsIInputStream> clonedStream;
+  cloneable->Clone(getter_AddRefs(clonedStream));
+
+  // Check what type of formating the request has
+  nsAutoCString contentType;
+  nsresult rv = chan->GetRequestHeader("Content-Type"_ns, contentType);
+  // application/json
+  // application/json; charset=utf-8
+  // multipart/form-data; boundary=----XYZ
+  // application/x-www-form-urlencoded; charset=UTF-8
+
+  nsAutoCString mimeType;
+  nsAutoCString charset;
+
+  rv = NS_ParseRequestContentType(contentType, mimeType, charset);
+  if (NS_FAILED(rv)) {
+    MYLOG(("nsHttpHandler: failed parsing request body"));
+    return NS_OK;
+  }
+
+  if (NS_SUCCEEDED(rv)) {
+    if (mimeType.Equals("application/json")) {
+      nsCString jsonBytes;
+      nsresult rv = NS_ReadInputStreamToString(
+        clonedStream,
+        jsonBytes,
+        -1  // read all the bytes
+      );
+      if(NS_FAILED(rv)){
+        MYLOG(("nsHttpHandler: failed reading input stream"));
+        return NS_OK;
+      }
+
+      mozilla::dom::AutoJSAPI jsapi;
+      if (!jsapi.Init(xpc::NativeGlobal(xpc::PrivilegedJunkScope()))) {
+        MYLOG(("nsHttpHandler: JSON context setup failed"));
+        return NS_OK;
+      }
+
+      JSContext* cx = jsapi.cx();
+
+      JS::RootedValue parsed(cx);
+      // Convert the nsCString to a char16_t
+      NS_ConvertUTF8toUTF16 json_string(jsonBytes);
+
+      if (!JS_ParseJSON(cx,
+                        json_string.get(),
+                        json_string.Length(),
+                        &parsed)) {
+        jsapi.ReportException();
+        return NS_ERROR_FAILURE;
+      }
+
+      if (!parsed.isObject()) {
+        MYLOG(("nsHttpHandler: invalid JSON"));
+        return NS_OK;
+      }
+
+      JS::RootedObject obj(cx, &parsed.toObject());
+
+      // Get credentials that were stored earlier from map
+      Credentials cred_values = mCredMap.Get(url);
+      nsCString fieldname_fromMap = cred_values.field;
+      const char* cstr_fieldname = fieldname_fromMap.get();
+      nsCString nonce_fromMap = cred_values.nonce;
+      const char* cstr_nonce = nonce_fromMap.get();
+      size_t nonce_len = nonce_fromMap.Length(); 
+      nsCString real_secret = cred_values.actualCredential;
+      const char* cstr_real_secret = real_secret.get();
+
+      //While url is correct we also need to make sure that the json has
+      // the correct nonce to replace in it
+      JS::RootedValue pot_nonce_outgoing(cx);
+      
+      // Do this check to see if this JSON has the right field
+      if (JS_GetProperty(cx, obj, cstr_fieldname, &pot_nonce_outgoing) && pot_nonce_outgoing.isString()) {
+        // Compare it against the nonce
+        JS::RootedString outgoing_jsStr(cx, pot_nonce_outgoing.toString());
+
+        nsAutoJSString outgoing_value;
+        if (!outgoing_value.init(cx, outgoing_jsStr)) {
+          MYLOG(("nsHttpHandler: couldn't convert the found value"));
+          return NS_OK;
+        }
+
+        if (!outgoing_value.EqualsASCII(cstr_nonce, nonce_len)) {
+          MYLOG(("nsHttpHandler: nonce not equal, nothing further needed"));
+          return NS_OK;
+        }
+
+
+        // change the secret from char* to JSString
+        JS::RootedString replacement_JSString(cx, JS_NewStringCopyZ(cx, cstr_real_secret));
+        if (!replacement_JSString) {
+          MYLOG(("nsHttpHandler: couldn't transform the secret value"));
+          return NS_OK;
+        }
+
+        // change further into a JSVal and set it in the object
+        JS::RootedValue replacement_JSVal(cx, JS::StringValue(replacement_JSString));
+        if (!JS_SetProperty(cx, obj, cstr_fieldname, replacement_JSVal)) {
+          MYLOG(("nsHttpHandler: couldn't put secret into JSON"));
+          return NS_OK;
+        }
+
+        MYLOG(("nsHttpHandler: Finished Replacement Correctly"));
+        return NS_OK;
+      }
+      else {
+        // No need to modify
+        return NS_OK;
+      }
+
+    }
+    else {
+      // No need to modify
+      return NS_OK;
+    }
+  }
 }
 
 }  // namespace mozilla::net

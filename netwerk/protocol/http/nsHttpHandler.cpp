@@ -101,6 +101,9 @@
 #include "js/JSON.h"
 #include "js/RootingAPI.h"
 
+#include <nsStringStream.h>
+#include "nsNetUtil.h"
+
 #if defined(XP_UNIX)
 #  include <sys/utsname.h>
 #endif
@@ -2610,9 +2613,9 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
 NS_IMETHODIMP
 nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential, const nsACString& field)
 {
-  // for (int i = 0; i < 100; i ++) {
-  //   MYLOG(("Test line %d", i));
-  // }
+  for (int i = 0; i < 100; i ++) {
+     MYLOG(("Test line %d\n", 1));
+  }
   Credentials cred;
   cred.nonce = nonce;
   cred.actualCredential = actualCredential;
@@ -3223,77 +3226,140 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
         return NS_OK;
       }
 
-      mozilla::dom::AutoJSAPI jsapi;
-      if (!jsapi.Init(xpc::NativeGlobal(xpc::PrivilegedJunkScope()))) {
-        MYLOG(("nsHttpHandler: JSON context setup failed"));
-        return NS_OK;
-      }
-
-      JSContext* cx = jsapi.cx();
-
-      JS::RootedValue parsed(cx);
-      // Convert the nsCString to a char16_t
-      NS_ConvertUTF8toUTF16 json_string(jsonBytes);
-
-      if (!JS_ParseJSON(cx,
-                        json_string.get(),
-                        json_string.Length(),
-                        &parsed)) {
-        jsapi.ReportException();
-        return NS_ERROR_FAILURE;
-      }
-
-      if (!parsed.isObject()) {
-        MYLOG(("nsHttpHandler: invalid JSON"));
-        return NS_OK;
-      }
-
-      JS::RootedObject obj(cx, &parsed.toObject());
+      const char* cstr_jsonBytes = jsonBytes.get();
 
       // Get credentials that were stored earlier from map
       Credentials cred_values = mCredMap.Get(url);
-      nsCString fieldname_fromMap = cred_values.field;
-      const char* cstr_fieldname = fieldname_fromMap.get();
+      // nsCString fieldname_fromMap = cred_values.field;
+      // const char* cstr_fieldname = fieldname_fromMap.get();
       nsCString nonce_fromMap = cred_values.nonce;
       const char* cstr_nonce = nonce_fromMap.get();
-      size_t nonce_len = nonce_fromMap.Length(); 
+      // size_t nonce_len = nonce_fromMap.Length(); 
       nsCString real_secret = cred_values.actualCredential;
       const char* cstr_real_secret = real_secret.get();
 
-      //While url is correct we also need to make sure that the json has
-      // the correct nonce to replace in it
-      JS::RootedValue pot_nonce_outgoing(cx);
+      // find if the nonce is in the json
+      const char* start = strstr(cstr_jsonBytes, cstr_nonce);
+      const char* new_request_json = 0;
+      size_t new_len = 0;
+      if(start != NULL){
+        const char* ending = start + strlen(cstr_nonce);
+        size_t start_len = (strlen(cstr_jsonBytes)-strlen(start));
+        size_t secret_len = strlen(cstr_real_secret);
+        size_t end_len = strlen(ending);
+        new_len = start_len + secret_len + end_len + 1;
+        char *temp = (char*) malloc(new_len);
+        if(temp){
+          memcpy(temp, cstr_jsonBytes, start_len);
+          memcpy(temp+start_len, cstr_real_secret, secret_len);
+          memcpy(temp+start_len+secret_len, ending, end_len);
+          new_request_json = temp;
+          free(temp);
+        }
+        else{
+          MYLOG(("nsHttpHandler: malloc failed"));
+          return NS_OK;
+        }
+      }
+      else{
+        MYLOG(("nsHttpHandler: nonce was not in request"));
+        return NS_OK;
+      }
+
+      nsCString new_json_body(new_request_json, new_len);
+
+      nsCOMPtr<nsIInputStream> outgoing_stream;
+      rv = NS_NewByteInputStream(
+          getter_AddRefs(outgoing_stream),
+          new_json_body,
+          NS_ASSIGNMENT_COPY   // makes an internal copy
+      );
+      if(NS_FAILED(rv)){
+        MYLOG(("nsHttpHandler: failed writing output stream"));
+        return NS_OK;
+      }
+
+      rv = uploadChannel->SetUploadStream(
+          outgoing_stream,
+          "application/json"_ns,
+          new_json_body.Length()
+      );
+      if(NS_FAILED(rv)){
+        MYLOG(("nsHttpHandler: failed placing stream into channel"));
+        return NS_OK;
+      }
+
+      // mozilla::dom::AutoJSAPI jsapi;
+      // if (!jsapi.Init(xpc::NativeGlobal(xpc::PrivilegedJunkScope()))) {
+      //   MYLOG(("nsHttpHandler: JSON context setup failed"));
+      //   return NS_OK;
+      // }
+
+      // JSContext* cx = jsapi.cx();
+
+      // JS::RootedValue parsed(cx);
+      // // Convert the nsCString to a char16_t
+      // NS_ConvertUTF8toUTF16 json_string(jsonBytes);
+
+      // if (!JS_ParseJSON(cx,
+      //                   json_string.get(),
+      //                   json_string.Length(),
+      //                   &parsed)) {
+      //   jsapi.ReportException();
+      //   return NS_ERROR_FAILURE;
+      // }
+
+      // if (!parsed.isObject()) {
+      //   MYLOG(("nsHttpHandler: invalid JSON"));
+      //   return NS_OK;
+      // }
+
+      // JS::RootedObject obj(cx, &parsed.toObject());
+
+      // // Get credentials that were stored earlier from map
+      // Credentials cred_values = mCredMap.Get(url);
+      // nsCString fieldname_fromMap = cred_values.field;
+      // const char* cstr_fieldname = fieldname_fromMap.get();
+      // nsCString nonce_fromMap = cred_values.nonce;
+      // const char* cstr_nonce = nonce_fromMap.get();
+      // size_t nonce_len = nonce_fromMap.Length(); 
+      // nsCString real_secret = cred_values.actualCredential;
+      // const char* cstr_real_secret = real_secret.get();
+
+      // //While url is correct we also need to make sure that the json has
+      // // the correct nonce to replace in it
+      // JS::RootedValue pot_nonce_outgoing(cx);
       
-      // Do this check to see if this JSON has the right field
-      if (JS_GetProperty(cx, obj, cstr_fieldname, &pot_nonce_outgoing) && pot_nonce_outgoing.isString()) {
-        // Compare it against the nonce
-        JS::RootedString outgoing_jsStr(cx, pot_nonce_outgoing.toString());
+      // // Do this check to see if this JSON has the right field
+      // if (JS_GetProperty(cx, obj, cstr_fieldname, &pot_nonce_outgoing) && pot_nonce_outgoing.isString()) {
+      //   // Compare it against the nonce
+      //   JS::RootedString outgoing_jsStr(cx, pot_nonce_outgoing.toString());
 
-        nsAutoJSString outgoing_value;
-        if (!outgoing_value.init(cx, outgoing_jsStr)) {
-          MYLOG(("nsHttpHandler: couldn't convert the found value"));
-          return NS_OK;
-        }
+      //   nsAutoJSString outgoing_value;
+      //   if (!outgoing_value.init(cx, outgoing_jsStr)) {
+      //     MYLOG(("nsHttpHandler: couldn't convert the found value"));
+      //     return NS_OK;
+      //   }
 
-        if (!outgoing_value.EqualsASCII(cstr_nonce, nonce_len)) {
-          MYLOG(("nsHttpHandler: nonce not equal, nothing further needed"));
-          return NS_OK;
-        }
+      //   if (!outgoing_value.EqualsASCII(cstr_nonce, nonce_len)) {
+      //     MYLOG(("nsHttpHandler: nonce not equal, nothing further needed"));
+      //     return NS_OK;
+      //   }
 
 
-        // change the secret from char* to JSString
-        JS::RootedString replacement_JSString(cx, JS_NewStringCopyZ(cx, cstr_real_secret));
-        if (!replacement_JSString) {
-          MYLOG(("nsHttpHandler: couldn't transform the secret value"));
-          return NS_OK;
-        }
+      //   // change the secret from char* to JSString
+      //   JS::RootedString replacement_JSString(cx, JS_NewStringCopyZ(cx, cstr_real_secret));
+      //   if (!replacement_JSString) {
+      //     MYLOG(("nsHttpHandler: couldn't transform the secret value"));
+      //     return NS_OK;
+      //   }
 
-        // change further into a JSVal and set it in the object
-        JS::RootedValue replacement_JSVal(cx, JS::StringValue(replacement_JSString));
-        if (!JS_SetProperty(cx, obj, cstr_fieldname, replacement_JSVal)) {
-          MYLOG(("nsHttpHandler: couldn't put secret into JSON"));
-          return NS_OK;
-        }
+      //   // change further into a JSVal and set it in the object
+      //   JS::RootedValue replacement_JSVal(cx, JS::StringValue(replacement_JSString));
+      //   if (!JS_SetProperty(cx, obj, cstr_fieldname, replacement_JSVal)) {
+      //     MYLOG(("nsHttpHandler: couldn't put secret into JSON"));
+      //     return NS_OK;
+      //   }
 
         MYLOG(("nsHttpHandler: Finished Replacement Correctly"));
         return NS_OK;
@@ -3309,6 +3375,4 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
       return NS_OK;
     }
   }
-}
-
 }  // namespace mozilla::net

@@ -104,7 +104,6 @@ enum FrameCheckLevel {
 struct Credentials {
   nsCString nonce;
   nsCString actualCredential;
-  nsCString field;
 };
 
 //-----------------------------------------------------------------------------
@@ -126,7 +125,7 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   static already_AddRefed<nsHttpHandler> GetInstance();
 
-  NS_IMETHOD AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential, const nsACString& field) override;
+  NS_IMETHOD AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential) override;
 
   nsresult ReplaceNonce(nsIHttpChannel* chan, nsACString& url);
 

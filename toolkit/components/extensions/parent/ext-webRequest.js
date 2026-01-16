@@ -264,12 +264,46 @@ this.webRequest = class extends ExtensionAPIPersistent {
 
           ChromeUtils.clearResourceCache({ target: "content" });
         },
-        handleCredentialReplacement: (actualCredential) => {
+        handleCredentialReplacement: async (actualCredential, url) => {
+          console.log("Received credentials: ", actualCredential);
+          console.log("Received url: ", url);
+          let nonce = this.safeUUID();
+          console.log("Generated Nonce: ", nonce);
           console.log("Calling network method...");
-          config.AddCredentials("testUrl", "testNonce", "testCredential", "testField");
+          config.AddCredentials(url, nonce, actualCredential);
           console.log("After AddCredentials");
+          return nonce;
         }
       },
     };
+  }
+
+  // Unsure of what is up with crypto right now, our version may be out of date
+  // This will need to always use something secure in practice
+  safeUUID() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      try {
+          console.log("using randomUUID");
+        return crypto.randomUUID();
+      } catch (e) {
+        console.warn("crypto.randomUUID failed, using fallback", e);
+      }
+    }
+
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      // fallback v4 implementation
+      console.log("using getRandomValues");
+      return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+      );
+    }
+
+    // Last-resort (not cryptographically secure)
+    console.log("no crypto found");
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 };

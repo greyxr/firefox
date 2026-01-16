@@ -465,8 +465,15 @@
           {
             "type": "string",
             "name": "actualCredential"
+          },
+          {
+            "type": "string",
+            "name": "url"
           }
-        ]
+        ],
+        "returns": {
+          "type": "string"
+        }
       },
       {
         "name": "filterResponseData",

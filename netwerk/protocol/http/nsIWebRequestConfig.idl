@@ -9,5 +9,5 @@ interface nsIWebRequestConfig : nsISupports
    *
    * This is process-global state owned by nsHttpHandler.
    */
-  void AddCredentials(in ACString url, in ACString nonce, in ACString actualCredential, in ACString field);
+  void AddCredentials(in ACString url, in ACString nonce, in ACString actualCredential);
 };

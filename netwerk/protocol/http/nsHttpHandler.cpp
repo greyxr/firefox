@@ -2220,11 +2220,9 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
           MYLOG((
             "Credentials found:\n"
             "  nonce=%s\n"
-            "  actualCredential=%s\n"
-            "  field=%s\n",
+            "  actualCredential=%s\n",
             cred.nonce.get(),
-            cred.actualCredential.get(),
-            cred.field.get()
+            cred.actualCredential.get()
           ));
           } else {
             MYLOG(("No credentials found for key=%s\n", aKey.get()));
@@ -2611,7 +2609,7 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
 }
 
 NS_IMETHODIMP
-nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential, const nsACString& field)
+nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential)
 {
   for (int i = 0; i < 100; i ++) {
      MYLOG(("Test line %d\n", 1));
@@ -2619,7 +2617,6 @@ nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, co
   Credentials cred;
   cred.nonce = nonce;
   cred.actualCredential = actualCredential;
-  cred.field = field;
   mCredMap.InsertOrUpdate(url, std::move(cred));
   MYLOG(("Set debug info"));
         // const nsACString aKey = url;
@@ -2628,11 +2625,9 @@ nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, co
         MYLOG((
           "Credentials found:\n"
           "  nonce=%s\n"
-          "  actualCredential=%s\n"
-          "  field=%s\n",
+          "  actualCredential=%s\n",
           cred.nonce.get(),
-          cred.actualCredential.get(),
-          cred.field.get()
+          cred.actualCredential.get()
         ));
           } else {
             MYLOG(("No credentials found for key")); // =%s\n", url));
@@ -3227,6 +3222,7 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
       }
 
       const char* cstr_jsonBytes = jsonBytes.get();
+      LOG(("Initial JSON: %s\n", cstr_jsonBytes));
 
       // Get credentials that were stored earlier from map
       Credentials cred_values = mCredMap.Get(url);
@@ -3265,6 +3261,8 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
         MYLOG(("nsHttpHandler: nonce was not in request"));
         return NS_OK;
       }
+
+      LOG(("Changed JSON: %s\n", cstr_jsonBytes));
 
       nsCString new_json_body(new_request_json, new_len);
 

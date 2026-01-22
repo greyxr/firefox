@@ -268,7 +268,7 @@ this.webRequest = class extends ExtensionAPIPersistent {
           console.log("Received credentials: ", actualCredential);
           url = url.trim();
           console.log("Received url: ", url);
-          let nonce = this.safeUUID();
+          let nonce = "888777666555" //this.safeUUID();
           console.log("Generated Nonce: ", nonce);
           console.log("Calling network method...");
           config.AddCredentials(url, nonce, actualCredential);

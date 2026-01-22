@@ -266,6 +266,7 @@ this.webRequest = class extends ExtensionAPIPersistent {
         },
         handleCredentialReplacement: async (actualCredential, url) => {
           console.log("Received credentials: ", actualCredential);
+          url = url.trim();
           console.log("Received url: ", url);
           let nonce = this.safeUUID();
           console.log("Generated Nonce: ", nonce);

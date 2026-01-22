@@ -2202,6 +2202,13 @@ nsresult nsHttpHandler::SetupChannelInternal(
   return NS_OK;
 }
 
+void PrintHex(const char* data, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    printf("%02X ", static_cast<unsigned char>(data[i]));
+  }
+  printf("\n");
+}
+
 NS_IMETHODIMP
 nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
                                  uint32_t proxyResolveFlags, nsIURI* proxyURI,
@@ -2210,22 +2217,45 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
 
   LOG(("nsHttpHandler::NewProxiedChannel [proxyInfo=%p]\n", givenProxyInfo));
 
+  printf("current size start : %d\n", mCredMap.Count());
+  for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
+    const nsACString& key = iter.Key();
+    printf("Key in Map: %s\n", PromiseFlatCString(key).get());
+    const char* key_stored = PromiseFlatCString(key).get();
+    
+    //PrintHex("http://127.0.0.1:5000/login", 27);
+    //PrintHex(key_stored, PromiseFlatCString(key).Length());
+    if (strcmp(key_stored, "http://127.0.0.1:5000/login") == 0){
+      printf("key is correct ------------------------------------------------\n");
+    }
+    break;
+  }
+
   if (IsNeckoChild()) {
-      // MYLOG(("Checking for URL..."));
-      // MYLOG(("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get()));
+      printf("Checking for URL... %s\n", uri->GetSpecOrDefault().get());
+      
       if (uri) {
-        const nsCString aKey = uri->GetSpecOrDefault();
-        if (auto entry = mCredMap.Lookup(aKey)) {
-          const Credentials& cred = entry.Data();
-          MYLOG((
+        //printf("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get());
+        nsCString aKey = uri->GetSpecOrDefault();
+        aKey.Trim(" \t\r\n");
+        if (strcmp(aKey.get(), "http://127.0.0.1:5000/login") == 0){
+            //PrintHex(aKey.get(), aKey.Length());
+            printf("key is correct ------------------------------------------------\n");   
+        }
+
+        printf("current size: %d\n", mCredMap.Count());
+        if (mCredMap.Contains(aKey)) {
+          const Credentials& cred = mCredMap.Get(aKey);
+          //const Credentials& cred = entry.Data();
+          printf(
             "Credentials found:\n"
             "  nonce=%s\n"
             "  actualCredential=%s\n",
             cred.nonce.get(),
             cred.actualCredential.get()
-          ));
+          );
           } else {
-            MYLOG(("No credentials found for key=%s\n", aKey.get()));
+            //printf("No credentials found for key=%s\n", aKey.get());
             }
       } else {
         MYLOG(("No URI found"));
@@ -2611,17 +2641,25 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
 NS_IMETHODIMP
 nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential)
 {
-  for (int i = 0; i < 100; i ++) {
-     MYLOG(("Test line %d\n", 1));
-  }
   Credentials cred;
   cred.nonce = nonce;
   cred.actualCredential = actualCredential;
-  mCredMap.InsertOrUpdate(url, std::move(cred));
+  nsCOMPtr<nsIURI> uri;
+  NS_NewURI(getter_AddRefs(uri), url);
+  nsCString formated_url;
+  uri->GetSpec(formated_url);
+  formated_url.Trim(" \t\r\n");
+
+  mCredMap.InsertOrUpdate(formated_url, std::move(cred));
   MYLOG(("Set debug info"));
         // const nsACString aKey = url;
       if (auto entry = mCredMap.Lookup(url)) {
         const Credentials& cred = entry.Data();
+        printf("Credentials found:\n"
+          "  nonce=%s\n"
+          "  actualCredential=%s\n",
+          cred.nonce.get(),
+          cred.actualCredential.get());
         MYLOG((
           "Credentials found:\n"
           "  nonce=%s\n"
@@ -2633,6 +2671,12 @@ nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, co
             MYLOG(("No credentials found for key")); // =%s\n", url));
           }
           MYLOG(("Finishing setting credentials."));
+//   for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
+//     const nsACString& key = iter.Key();
+//     //auto value = iter.Get()->GetData();   // int
+//     printf("Key: %s\n", PromiseFlatCString(key).get());
+//     break;  // stop at the "first" key
+// }
   return NS_OK;
 }
 
@@ -3169,6 +3213,13 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
 // The return for this function likely needs to be something else
 //  if there is an error then the calling function needs to handle it properly 
 nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
+  printf("");
+  for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
+    const nsACString& key = iter.Key();
+    //auto value = iter.Get()->GetData();   // int
+    printf("Key: %s\n", PromiseFlatCString(key).get());
+    break;  // stop at the "first" key
+  }
   nsCOMPtr<nsIUploadChannel> uploadChannel = do_QueryInterface(chan);
   if (!uploadChannel) {
     MYLOG(("nsHttpHandler: invalid channel"));

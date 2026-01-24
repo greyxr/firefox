@@ -114,6 +114,8 @@
 #include "mozilla/dom/ContentChild.h"
 #include "nsQueryObject.h"
 
+#include "nsHttpHandler.h"
+
 using mozilla::dom::ForceMediaDocument;
 using mozilla::dom::RequestMode;
 
@@ -864,6 +866,9 @@ HttpBaseChannel::SetUploadStream(nsIInputStream* stream,
   // and so we select POST as the request method if contentType and
   // contentLength are unspecified.
 
+  nsIURI* uri = mURI;
+  printf("Hello %s\n", uri->GetSpecOrDefault().get());
+
   if (stream) {
     nsAutoCString method;
     bool hasHeaders = false;
@@ -1240,6 +1245,70 @@ HttpBaseChannel::ExplicitSetUploadStream(nsIInputStream* aStream,
   if (mURI) {
       mURI->GetSpec(uriSpec);
   }
+
+
+  nsIURI* uri = mURI;
+  nsHttpHandler* handler = gHttpHandler;
+  // if(handler){
+  //   handler->mCredMap;
+  // }
+  printf("current size start : %d\n", handler->mCredMap.Count());
+  for (auto iter = handler->mCredMap.Iter(); !iter.Done(); iter.Next()) {
+    const nsACString& key = iter.Key();
+    printf("Key in Map: %s\n", PromiseFlatCString(key).get());
+    const char* key_stored = PromiseFlatCString(key).get();
+    
+    //PrintHex("http://127.0.0.1:5000/login", 27);
+    //PrintHex(key_stored, PromiseFlatCString(key).Length());
+    if (strcmp(key_stored, "http://127.0.0.1:5000/login") == 0){
+      printf("key is correct ------------------------------------------------\n");
+    }
+    break;
+  }
+
+  //if (IsNeckoChild()) {
+      printf("Checking for URL... %s\n", uri->GetSpecOrDefault().get());
+      
+      if (uri) {
+        //printf("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get());`
+        nsCString aKey = uri->GetSpecOrDefault();
+        aKey.Trim(" \t\r\n");
+        if (strcmp(aKey.get(), "http://127.0.0.1:5000/login") == 0){
+            //PrintHex(aKey.get(), aKey.Length());
+            printf("key is correct ------------------------------------------------\n");   
+            nsresult result = handler->ReplaceNonce(this, aKey);
+            if(NS_FAILED(result)){
+              printf("Called to replace failed\n");
+            }
+        }
+
+        printf("current size: %d\n", handler->mCredMap.Count());
+        if (handler->mCredMap.Contains(aKey)) {
+          const Credentials& cred = handler->mCredMap.Get(aKey);
+          //const Credentials& cred = entry.Data();
+          printf(
+            "Credentials found:\n"
+            "  nonce=%s\n"
+            "  actualCredential=%s\n",
+            cred.nonce.get(),
+            cred.actualCredential.get()
+          );
+
+          nsCString s;
+          mURI->GetSpec(s);
+          handler->ReplaceNonce(this, s);
+          } else {
+            //printf("No credentials found for key=%s\n", aKey.get());
+          }
+
+        
+      } else {
+        //MYLOG(("No URI found"));
+      }
+    
+  // } else {
+
+  // }
 
   LOG(("ANALYTICS: HttpBaseChannel::ExplicitSetUploadStream completed in %.3f ms [this=%p] [channelId=%llu] URL=%s\n",
        milliseconds, this, mChannelId, uriSpec.get()));

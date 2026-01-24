@@ -2217,54 +2217,55 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
 
   LOG(("nsHttpHandler::NewProxiedChannel [proxyInfo=%p]\n", givenProxyInfo));
 
-  printf("current size start : %d\n", mCredMap.Count());
-  for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
-    const nsACString& key = iter.Key();
-    printf("Key in Map: %s\n", PromiseFlatCString(key).get());
-    const char* key_stored = PromiseFlatCString(key).get();
+  // printf("current size start : %d\n", mCredMap.Count());
+  // for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
+  //   const nsACString& key = iter.Key();
+  //   printf("Key in Map: %s\n", PromiseFlatCString(key).get());
+  //   const char* key_stored = PromiseFlatCString(key).get();
     
-    //PrintHex("http://127.0.0.1:5000/login", 27);
-    //PrintHex(key_stored, PromiseFlatCString(key).Length());
-    if (strcmp(key_stored, "http://127.0.0.1:5000/login") == 0){
-      printf("key is correct ------------------------------------------------\n");
-    }
-    break;
-  }
+  //   //PrintHex("http://127.0.0.1:5000/login", 27);
+  //   //PrintHex(key_stored, PromiseFlatCString(key).Length());
+  //   if (strcmp(key_stored, "http://127.0.0.1:5000/login") == 0){
+  //     printf("key is correct ------------------------------------------------\n");
+  //   }
+  //   break;
+  // }
 
   if (IsNeckoChild()) {
-      printf("Checking for URL... %s\n", uri->GetSpecOrDefault().get());
-      
-      if (uri) {
-        //printf("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get());
-        nsCString aKey = uri->GetSpecOrDefault();
-        aKey.Trim(" \t\r\n");
-        if (strcmp(aKey.get(), "http://127.0.0.1:5000/login") == 0){
-            //PrintHex(aKey.get(), aKey.Length());
-            printf("key is correct ------------------------------------------------\n");   
-            nsresult result = ReplaceNonce(httpChannel, aKey);
-            if(NS_FAILED(result)){
-              printf("Called to replace failed\n");
-            }
-        }
-
-        printf("current size: %d\n", mCredMap.Count());
-        if (mCredMap.Contains(aKey)) {
-          const Credentials& cred = mCredMap.Get(aKey);
-          //const Credentials& cred = entry.Data();
-          printf(
-            "Credentials found:\n"
-            "  nonce=%s\n"
-            "  actualCredential=%s\n",
-            cred.nonce.get(),
-            cred.actualCredential.get()
-          );
-          } else {
-            //printf("No credentials found for key=%s\n", aKey.get());
-            }
-      } else {
-        MYLOG(("No URI found"));
-      }
     httpChannel = new HttpChannelChild();
+      // printf("Checking for URL... %s\n", uri->GetSpecOrDefault().get());
+      
+      // if (uri) {
+      //   //printf("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get());
+      //   nsCString aKey = uri->GetSpecOrDefault();
+      //   aKey.Trim(" \t\r\n");
+      //   if (strcmp(aKey.get(), "http://127.0.0.1:5000/login") == 0){
+      //       //PrintHex(aKey.get(), aKey.Length());
+      //       printf("key is correct ------------------------------------------------\n");   
+      //       nsresult result = ReplaceNonce(httpChannel, aKey);
+      //       if(NS_FAILED(result)){
+      //         printf("Called to replace failed\n");
+      //       }
+      //   }
+
+      //   printf("current size: %d\n", mCredMap.Count());
+      //   if (mCredMap.Contains(aKey)) {
+      //     const Credentials& cred = mCredMap.Get(aKey);
+      //     //const Credentials& cred = entry.Data();
+      //     printf(
+      //       "Credentials found:\n"
+      //       "  nonce=%s\n"
+      //       "  actualCredential=%s\n",
+      //       cred.nonce.get(),
+      //       cred.actualCredential.get()
+      //     );
+      //     } else {
+      //       //printf("No credentials found for key=%s\n", aKey.get());
+      //       }
+      // } else {
+      //   MYLOG(("No URI found"));
+      // }
+    
   } else {
       // MYLOG(("Parent log: info %s", mDebugInfoFromWebRequest.get()));
     // HACK: make sure PSM gets initialized on the main thread.
@@ -2272,8 +2273,66 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
     httpChannel = new nsHttpChannel();
   }
 
-  return SetupChannelInternal(httpChannel, uri, givenProxyInfo,
+  nsresult setup_result = SetupChannelInternal(httpChannel, uri, givenProxyInfo,
                               proxyResolveFlags, proxyURI, aLoadInfo, result);
+  if(NS_FAILED(setup_result)){
+    printf("SetupChannelInternal failed\n");
+    return setup_result;
+  }
+
+  // printf("current size start : %d\n", mCredMap.Count());
+  // for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
+  //   const nsACString& key = iter.Key();
+  //   printf("Key in Map: %s\n", PromiseFlatCString(key).get());
+  //   const char* key_stored = PromiseFlatCString(key).get();
+    
+  //   //PrintHex("http://127.0.0.1:5000/login", 27);
+  //   //PrintHex(key_stored, PromiseFlatCString(key).Length());
+  //   if (strcmp(key_stored, "http://127.0.0.1:5000/login") == 0){
+  //     printf("key is correct ------------------------------------------------\n");
+  //   }
+  //   break;
+  // }
+
+  // if (IsNeckoChild()) {
+  //     printf("Checking for URL... %s\n", uri->GetSpecOrDefault().get());
+      
+  //     if (uri) {
+  //       //printf("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get());
+  //       nsCString aKey = uri->GetSpecOrDefault();
+  //       aKey.Trim(" \t\r\n");
+  //       if (strcmp(aKey.get(), "http://127.0.0.1:5000/login") == 0){
+  //           //PrintHex(aKey.get(), aKey.Length());
+  //           printf("key is correct ------------------------------------------------\n");   
+  //           nsresult result = ReplaceNonce(httpChannel, aKey);
+  //           if(NS_FAILED(result)){
+  //             printf("Called to replace failed\n");
+  //           }
+  //       }
+
+  //       printf("current size: %d\n", mCredMap.Count());
+  //       if (mCredMap.Contains(aKey)) {
+  //         const Credentials& cred = mCredMap.Get(aKey);
+  //         //const Credentials& cred = entry.Data();
+  //         printf(
+  //           "Credentials found:\n"
+  //           "  nonce=%s\n"
+  //           "  actualCredential=%s\n",
+  //           cred.nonce.get(),
+  //           cred.actualCredential.get()
+  //         );
+  //         } else {
+  //           //printf("No credentials found for key=%s\n", aKey.get());
+  //           }
+  //     } else {
+  //       MYLOG(("No URI found"));
+  //     }
+    
+  // } else {
+
+  // }
+
+  return setup_result;
 }
 
 nsresult nsHttpHandler::CreateTRRServiceChannel(

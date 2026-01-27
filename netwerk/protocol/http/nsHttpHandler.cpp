@@ -3276,6 +3276,7 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
 // The return for this function likely needs to be something else
 //  if there is an error then the calling function needs to handle it properly 
 nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
+  printf("in replace nonce\n");
   nsCOMPtr<nsIUploadChannel> uploadChannel = do_QueryInterface(chan);
   if (!uploadChannel) {
     printf("nsHttpHandler: invalid channel\n");
@@ -3311,7 +3312,9 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
     return NS_OK;
   }
 
+  printf("Parsed correctly\n");
   if (NS_SUCCEEDED(rv)) {
+    printf("mimeType %s\n", mimeType.get());
     if (mimeType.Equals("application/json")) {
       nsCString jsonBytes;
       nsresult rv = NS_ReadInputStreamToString(
@@ -3326,6 +3329,8 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
 
       const char* cstr_jsonBytes = jsonBytes.get();
       printf("Initial JSON: %s\n", cstr_jsonBytes);
+      PrintHex(cstr_jsonBytes, jsonBytes.Length());
+      PrintHex("{'username': 'admin', 'password': 'password123'}", 48);
 
       // // Get credentials that were stored earlier from map
       // Credentials cred_values = mCredMap.Get(url);
@@ -3349,10 +3354,15 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
       const char* cstr_real_secret = real_secret.get();
 
       // find if the nonce is in the json
-      const char* start = strstr(cstr_jsonBytes, cstr_nonce);
+      const char* start; // = strstr(cstr_jsonBytes, cstr_nonce);
+      uint32_t temp = jsonBytes.Find(nonce_fromMap, 0);
+      //printf("locationTemp: %d\n", temp);
+      printf("locationStart: %d\n", temp);
+      start = cstr_jsonBytes + temp;
       const char* new_request_json = 0;
       size_t new_len = 0;
-      if(start != NULL){
+      // If start would come before the start of the body string
+      if((uint64_t)start >= (uint64_t)cstr_jsonBytes){
         const char* ending = start + strlen(cstr_nonce);
         size_t start_len = (strlen(cstr_jsonBytes)-strlen(start));
         size_t secret_len = strlen(cstr_real_secret);
@@ -3370,6 +3380,8 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
           printf("nsHttpHandler: malloc failed\n");
           return NS_OK;
         }
+
+        // Clear from map
       }
       else{
         printf("nsHttpHandler: nonce was not in request\n");

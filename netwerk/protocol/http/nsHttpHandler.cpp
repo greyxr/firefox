@@ -2233,38 +2233,6 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
 
   if (IsNeckoChild()) {
     httpChannel = new HttpChannelChild();
-      // printf("Checking for URL... %s\n", uri->GetSpecOrDefault().get());
-      
-      // if (uri) {
-      //   //printf("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get());
-      //   nsCString aKey = uri->GetSpecOrDefault();
-      //   aKey.Trim(" \t\r\n");
-      //   if (strcmp(aKey.get(), "http://127.0.0.1:5000/login") == 0){
-      //       //PrintHex(aKey.get(), aKey.Length());
-      //       printf("key is correct ------------------------------------------------\n");   
-      //       nsresult result = ReplaceNonce(httpChannel, aKey);
-      //       if(NS_FAILED(result)){
-      //         printf("Called to replace failed\n");
-      //       }
-      //   }
-
-      //   printf("current size: %d\n", mCredMap.Count());
-      //   if (mCredMap.Contains(aKey)) {
-      //     const Credentials& cred = mCredMap.Get(aKey);
-      //     //const Credentials& cred = entry.Data();
-      //     printf(
-      //       "Credentials found:\n"
-      //       "  nonce=%s\n"
-      //       "  actualCredential=%s\n",
-      //       cred.nonce.get(),
-      //       cred.actualCredential.get()
-      //     );
-      //     } else {
-      //       //printf("No credentials found for key=%s\n", aKey.get());
-      //       }
-      // } else {
-      //   MYLOG(("No URI found"));
-      // }
     
   } else {
       // MYLOG(("Parent log: info %s", mDebugInfoFromWebRequest.get()));
@@ -2712,34 +2680,30 @@ nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, co
   nsCString formated_url;
   uri->GetSpec(formated_url);
   formated_url.Trim(" \t\r\n");
-
-  mCredMap.InsertOrUpdate(formated_url, std::move(cred));
-  MYLOG(("Set debug info"));
+  if (auto entry = mCredMap.Lookup(url)) {
+    const Credentials& cred = entry.Data();
+    printf("Credentials already found in map:\n"
+      "  nonce=%s\n"
+      "  actualCredential=%s\n",
+      cred.nonce.get(),
+      cred.actualCredential.get());
+      } else {
+        printf("No credentials found for key, adding to map."); // =%s\n", url));
+        mCredMap.InsertOrUpdate(formated_url, std::move(cred));
+        printf("Set debug info");
         // const nsACString aKey = url;
-      if (auto entry = mCredMap.Lookup(url)) {
-        const Credentials& cred = entry.Data();
-        printf("Credentials found:\n"
-          "  nonce=%s\n"
-          "  actualCredential=%s\n",
-          cred.nonce.get(),
-          cred.actualCredential.get());
-        MYLOG((
-          "Credentials found:\n"
-          "  nonce=%s\n"
-          "  actualCredential=%s\n",
-          cred.nonce.get(),
-          cred.actualCredential.get()
-        ));
-          } else {
-            MYLOG(("No credentials found for key")); // =%s\n", url));
-          }
-          MYLOG(("Finishing setting credentials."));
-//   for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
-//     const nsACString& key = iter.Key();
-//     //auto value = iter.Get()->GetData();   // int
-//     printf("Key: %s\n", PromiseFlatCString(key).get());
-//     break;  // stop at the "first" key
-// }
+        if (auto entry = mCredMap.Lookup(url)) {
+          const Credentials& cred = entry.Data();
+          printf("Credentials found:\n"
+            "  nonce=%s\n"
+            "  actualCredential=%s\n",
+            cred.nonce.get(),
+            cred.actualCredential.get());
+            } else {
+              printf("No credentials found for key"); // =%s\n", url));
+            }
+        }
+          printf("Finished setting credentials.");
   return NS_OK;
 }
 
@@ -3273,10 +3237,13 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
       aExtraStringData);
 }
 
-// The return for this function likely needs to be something else
-//  if there is an error then the calling function needs to handle it properly 
-nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
-  printf("in replace nonce\n");
+  Credentials nsHttpHandler::GetCredentials(const nsACString& url){
+    }
+
+  // The return for this function likely needs to be something else
+  //  if there is an error then the calling function needs to handle it properly 
+  nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
+    printf("in replace nonce\n");
   nsCOMPtr<nsIUploadChannel> uploadChannel = do_QueryInterface(chan);
   if (!uploadChannel) {
     printf("nsHttpHandler: invalid channel\n");
@@ -3329,8 +3296,8 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
 
       const char* cstr_jsonBytes = jsonBytes.get();
       printf("Initial JSON: %s\n", cstr_jsonBytes);
-      PrintHex(cstr_jsonBytes, jsonBytes.Length());
-      PrintHex("{'username': 'admin', 'password': 'password123'}", 48);
+      // PrintHex(cstr_jsonBytes, jsonBytes.Length());
+      // PrintHex("{'username': 'admin', 'password': 'password123'}", 48);
 
       // // Get credentials that were stored earlier from map
       // Credentials cred_values = mCredMap.Get(url);
@@ -3344,53 +3311,55 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
 
 
       // Get credentials that were stored earlier from map
-      //Credentials cred_values = mCredMap.Get(url);
-      // nsCString fieldname_fromMap = cred_values.field;
-      // const char* cstr_fieldname = fieldname_fromMap.get();
-      nsCString nonce_fromMap = "888777666555"_ns;
-      const char* cstr_nonce = nonce_fromMap.get();
+      Credentials cred_values = mCredMap.Get(url);
+      nsCString nonce_fromMap = cred_values.nonce;
+      //const char* cstr_nonce = nonce_fromMap.get();
       // size_t nonce_len = nonce_fromMap.Length(); 
-      nsCString real_secret = "password123"_ns;
-      const char* cstr_real_secret = real_secret.get();
+      nsCString real_secret = cred_values.actualCredential;
+      //const char* cstr_real_secret = real_secret.get();
 
       // find if the nonce is in the json
-      const char* start; // = strstr(cstr_jsonBytes, cstr_nonce);
+      // const char* start; // = strstr(cstr_jsonBytes, cstr_nonce);
       uint32_t temp = jsonBytes.Find(nonce_fromMap, 0);
-      //printf("locationTemp: %d\n", temp);
-      printf("locationStart: %d\n", temp);
-      start = cstr_jsonBytes + temp;
-      const char* new_request_json = 0;
-      size_t new_len = 0;
-      // If start would come before the start of the body string
-      if((uint64_t)start >= (uint64_t)cstr_jsonBytes){
-        const char* ending = start + strlen(cstr_nonce);
-        size_t start_len = (strlen(cstr_jsonBytes)-strlen(start));
-        size_t secret_len = strlen(cstr_real_secret);
-        size_t end_len = strlen(ending);
-        new_len = start_len + secret_len + end_len + 1;
-        char *temp = (char*) malloc(new_len);
-        if(temp){
-          memcpy(temp, cstr_jsonBytes, start_len);
-          memcpy(temp+start_len, cstr_real_secret, secret_len);
-          memcpy(temp+start_len+secret_len, ending, end_len);
-          new_request_json = temp;
-          free(temp);
-        }
-        else{
-          printf("nsHttpHandler: malloc failed\n");
-          return NS_OK;
-        }
+      if((uint)temp >= 0){
+        //printf("locationTemp: %d\n", temp);
+        // printf("locationTemp: %d\n", (uint)temp);
+        // start = cstr_jsonBytes + temp;
+        // printf("locationStart: %d\n", start);
+        //const char* new_request_json = 0;
+        //size_t new_len = 0;
+        // If start would come before the start of the body string
+      
+        jsonBytes.ReplaceSubstring(nonce_fromMap, real_secret);
+
+        // const char* ending = start + strlen(cstr_nonce);
+        // size_t start_len = (strlen(cstr_jsonBytes)-strlen(start));
+        // size_t secret_len = strlen(cstr_real_secret);
+        // size_t end_len = strlen(ending);
+        // new_len = start_len + secret_len + end_len + 1;
+        // char *temp = (char*) malloc(new_len);
+        // if(temp){
+        //   memcpy(temp, cstr_jsonBytes, start_len);
+        //   memcpy(temp+start_len, cstr_real_secret, secret_len);
+        //   memcpy(temp+start_len+secret_len, ending, end_len);
+        //   new_request_json = temp;
+        //   free(temp);
+        // }
+        // else{
+        //   printf("nsHttpHandler: malloc failed\n");
+        //   return NS_OK;
+        // }
 
         // Clear from map
+        mCredMap.Remove(url);
+        printf("Changed JSON: %s\n", cstr_jsonBytes);
       }
       else{
         printf("nsHttpHandler: nonce was not in request\n");
         return NS_OK;
       }
 
-      printf("Changed JSON: %s\n", cstr_jsonBytes);
-
-      nsCString new_json_body(new_request_json, new_len);
+      nsCString new_json_body(jsonBytes);
 
       nsCOMPtr<nsIInputStream> outgoing_stream;
       rv = NS_NewByteInputStream(

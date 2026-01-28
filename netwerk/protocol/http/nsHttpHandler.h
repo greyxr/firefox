@@ -129,6 +129,8 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   nsresult ReplaceNonce(nsIHttpChannel* chan, nsACString& url);
 
+  Credentials GetCredentials(const nsACString& url);
+
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,
       bool aSecure, nsHttpChannel* aChan, void (*aSuspend)(nsHttpChannel*),

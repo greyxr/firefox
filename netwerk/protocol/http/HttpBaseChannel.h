@@ -683,6 +683,17 @@ class HttpBaseChannel : public nsHashPropertyBag,
     StoreRequestObserversCalled(true);
   }
 
+  inline void CallReplaceNonce(nsACString& url) {
+    gHttpHandler->ReplaceNonce(this, url);
+    printf("HttpBaseChannel::CallReplaceNonce called\n");
+  }
+
+  inline mozilla::net::Credentials CallGetCredentials(nsACString& url) {
+    mozilla::net::Credentials cred = gHttpHandler->GetCredentials(url);
+    printf("HttpBaseChannel::CallGetCredentials called\n");
+    return cred;
+  }
+
   // Helper function to simplify getting notification callbacks.
   template <class T>
   void GetCallback(nsCOMPtr<T>& aResult) {

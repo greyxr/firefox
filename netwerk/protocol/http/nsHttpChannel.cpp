@@ -834,9 +834,9 @@ nsresult nsHttpChannel::ContinuePrepareToConnect() {
   mozilla::net::Credentials cred = CallGetCredentials(url);
   if (isNothing(cred)) {
     printf("nsHttpChannel::ContinuePrepareToConnect no credentials\n");
-    CallReplaceNonce(url);
   } else {
     printf("nsHttpChannel::ContinuePrepareToConnect got credentials\n");
+    CallReplaceNonce(url);
   }
 
   return CallOrWaitForResume(

@@ -104,6 +104,9 @@ enum FrameCheckLevel {
 struct Credentials {
   nsCString nonce;
   nsCString actualCredential;
+  bool isEmpty() const {
+    return nonce.IsEmpty() || actualCredential.IsEmpty();
+  }
 };
 
 //-----------------------------------------------------------------------------

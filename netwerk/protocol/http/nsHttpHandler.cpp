@@ -3238,7 +3238,7 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
 }
 
   Credentials nsHttpHandler::GetCredentials(const nsACString& url){
-    printf("Getting credentials for url: %s\n", url);
+    printf("Getting credentials for url\n"); //: %s\n", url);
     auto entry = mCredMap.Lookup(url);
     if (entry) {
       const Credentials& cred = entry.Data();
@@ -3249,8 +3249,8 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
         cred.actualCredential.get());
         return cred;
       } else {
-        printf("No credentials found for key: %s\n", url);
-        return;
+        printf("No credentials found for key\n"); // %s\n", url);
+        return Credentials();
       }
     }
 

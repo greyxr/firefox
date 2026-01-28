@@ -1270,17 +1270,8 @@ HttpBaseChannel::ExplicitSetUploadStream(nsIInputStream* aStream,
       printf("Checking for URL... %s\n", uri->GetSpecOrDefault().get());
       
       if (uri) {
-        //printf("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get());`
         nsCString aKey = uri->GetSpecOrDefault();
         aKey.Trim(" \t\r\n");
-        if (strcmp(aKey.get(), "http://127.0.0.1:5000/login") == 0){
-            //PrintHex(aKey.get(), aKey.Length());
-            printf("key is correct ------------------------------------------------\n");   
-            nsresult result = handler->ReplaceNonce(this, aKey);
-            if(NS_FAILED(result)){
-              printf("Called to replace failed\n");
-            }
-        }
 
         printf("current size: %d\n", handler->mCredMap.Count());
         if (handler->mCredMap.Contains(aKey)) {

@@ -832,7 +832,12 @@ nsresult nsHttpChannel::ContinuePrepareToConnect() {
   // TODO: Error checking
   printf("nsHttpChannel::ContinuePrepareToConnect got URI: %s\n", url.get());
   mozilla::net::Credentials cred = CallGetCredentials(url);
-  CallReplaceNonce(url);
+  if (isNothing(cred)) {
+    printf("nsHttpChannel::ContinuePrepareToConnect no credentials\n");
+    CallReplaceNonce(url);
+  } else {
+    printf("nsHttpChannel::ContinuePrepareToConnect got credentials\n");
+  }
 
   return CallOrWaitForResume(
       [](auto* self) { return self->OnBeforeConnect(); });

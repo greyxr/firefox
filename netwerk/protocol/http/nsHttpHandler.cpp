@@ -2677,10 +2677,13 @@ nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, co
   cred.actualCredential = actualCredential;
   nsCOMPtr<nsIURI> uri;
   NS_NewURI(getter_AddRefs(uri), url);
-  nsCString formated_url;
-  uri->GetSpec(formated_url);
-  formated_url.Trim(" \t\r\n");
-  if (auto entry = mCredMap.Lookup(url)) {
+  // nsCString formated_url;
+  // uri->GetSpec(formated_url);
+  nsCString host;
+  uri->GetAsciiHost(host);
+  printf("ASCII HOST: %s\n", host.get());
+  // formated_url.Trim(" \t\r\n");
+  if (auto entry = mCredMap.Lookup(host)) {
     const Credentials& cred = entry.Data();
     printf("Credentials already found in map:\n"
       "  nonce=%s\n"
@@ -2689,10 +2692,10 @@ nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, co
       cred.actualCredential.get());
       } else {
         printf("No credentials found for key, adding to map."); // =%s\n", url));
-        mCredMap.InsertOrUpdate(formated_url, std::move(cred));
+        mCredMap.InsertOrUpdate(host, std::move(cred));
         printf("Set debug info");
         // const nsACString aKey = url;
-        if (auto entry = mCredMap.Lookup(url)) {
+        if (auto entry = mCredMap.Lookup(host)) {
           const Credentials& cred = entry.Data();
           printf("Credentials found:\n"
             "  nonce=%s\n"
@@ -3238,8 +3241,13 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
 }
 
   Credentials nsHttpHandler::GetCredentials(const nsACString& url){
-    printf("Getting credentials for url\n"); //: %s\n", url);
-    auto entry = mCredMap.Lookup(url);
+    nsCOMPtr<nsIURI> uri;
+    NS_NewURI(getter_AddRefs(uri), url);
+    nsCString host;
+    uri->GetAsciiHost(host);
+    printf("Getting credentials for url: %s\n", host.get());
+    printf("ASCII HOST: %s\n", host.get());
+    auto entry = mCredMap.Lookup(host);
     if (entry) {
       const Credentials& cred = entry.Data();
       printf("Credentials found:\n"

@@ -3233,12 +3233,12 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
   int32_t pos = body.Find(cred.nonce);
   if (pos < 0) {
     printf("ReplaceNonce: Nonce not found in body\n");
-    return NS_OK;
-  }
+  } else {
   printf("ReplaceNonce: Found nonce at position %d\n", pos);
   
   body.ReplaceSubstring(cred.nonce, cred.actualCredential);
   printf("ReplaceNonce: Modified body (%zu bytes): %s\n", body.Length(), body.get());
+  }
 
   // Create new stream and replace
   nsCOMPtr<nsIInputStream> newStream;
@@ -3255,7 +3255,7 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
     rv = chan->GetRequestMethod(method);
     if (NS_FAILED(rv)) {
       printf("ReplaceNonce: Failed to get request method, rv=0x%x\n", static_cast<uint32_t>(rv));
-      return rv;
+      return rv; // Not sure what to do here. This will kill the request
     }
     printf("ReplaceNonce: Request method: %s\n", method.get());
     rv = uploadChannel2->ExplicitSetUploadStream(newStream, contentType, body.Length(), method, false);

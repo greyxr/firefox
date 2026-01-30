@@ -2615,7 +2615,7 @@ nsHttpHandler::AddCredential(const nsACString& url, const nsACString& nonce, con
   // uri->GetSpec(formated_url);
   nsCString host;
   uri->GetAsciiHost(host);
-  printf("ASCII HOST: %s\n", host.get());
+  // printf("ASCII HOST: %s\n", host.get());
   // formated_url.Trim(" \t\r\n");
   if (auto entry = mCredMap.Lookup(host)) {
     const Credential& cred = entry.Data();
@@ -2626,8 +2626,9 @@ nsHttpHandler::AddCredential(const nsACString& url, const nsACString& nonce, con
       cred.actualCredential.get());
       } else {
         printf("No credential found for key, adding to map."); // =%s\n", url));
+        }
         mCredMap.InsertOrUpdate(host, std::move(cred));
-        printf("Set debug info");
+        printf("!!!!!!!!!!!!!!Set debug info!!!!!!!!!!!!!!!!!!!!!!");
         // const nsACString aKey = url;
         if (auto entry = mCredMap.Lookup(host)) {
           const Credential& cred = entry.Data();
@@ -2639,7 +2640,6 @@ nsHttpHandler::AddCredential(const nsACString& url, const nsACString& nonce, con
             } else {
               printf("No credential found for key"); // =%s\n", url));
             }
-        }
           printf("Finished setting credential.");
   return NS_OK;
 }
@@ -3179,8 +3179,8 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
     NS_NewURI(getter_AddRefs(uri), url);
     nsCString host;
     uri->GetAsciiHost(host);
-    printf("Getting credential for url: %s\n", host.get());
-    printf("ASCII HOST: %s\n", host.get());
+    // printf("Getting credential for url: %s\n", host.get());
+    // printf("ASCII HOST: %s\n", host.get());
     auto entry = mCredMap.Lookup(host);
     if (entry) {
       const Credential& cred = entry.Data();
@@ -3191,14 +3191,22 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
         cred.actualCredential.get());
         return cred;
       } else {
-        printf("No credential found for key\n"); // %s\n", url);
+        // printf("No credential found for key\n"); // %s\n", url);
         return Credential();
       }
     }
 
+  void nsHttpHandler::RemoveCredential(const nsACString& url){
+    nsCOMPtr<nsIURI> uri;
+    NS_NewURI(getter_AddRefs(uri), url);
+    nsCString host;
+    uri->GetAsciiHost(host);
+    mCredMap.Remove(host);
+    }
+
   // The return for this function likely needs to be something else
   //  if there is an error then the calling function needs to handle it properly 
-  nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, Credential cred){
+  nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, Credential cred, nsACString& url){
   printf("ReplaceNonce: Starting\n");
   
   nsCOMPtr<nsIUploadChannel> uploadChannel = do_QueryInterface(chan);
@@ -3238,6 +3246,7 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
   
   body.ReplaceSubstring(cred.nonce, cred.actualCredential);
   printf("ReplaceNonce: Modified body (%zu bytes): %s\n", body.Length(), body.get());
+  RemoveCredential(url);
   }
 
   // Create new stream and replace

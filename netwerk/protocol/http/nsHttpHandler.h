@@ -130,9 +130,11 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   NS_IMETHOD AddCredential(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential) override;
 
-  nsresult ReplaceNonce(nsIHttpChannel* chan, Credential cred);
+  nsresult ReplaceNonce(nsIHttpChannel* chan, Credential cred, nsACString& url);
 
   Credential GetCredential(const nsACString& url);
+
+  void RemoveCredential(const nsACString& url);
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,

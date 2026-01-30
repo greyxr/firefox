@@ -831,12 +831,12 @@ nsresult nsHttpChannel::ContinuePrepareToConnect() {
   nsCString url = mURI->GetSpecOrDefault();
   // TODO: Error checking
   printf("nsHttpChannel::ContinuePrepareToConnect got URI: %s\n", url.get());
-  mozilla::net::Credentials cred = CallGetCredentials(url);
-  if (cred.isEmpty()) {
+  mozilla::net::Credential cred = CallGetCredential(url);
+  if (cred.IsEmpty()) {
     printf("nsHttpChannel::ContinuePrepareToConnect no credentials\n");
   } else {
     printf("nsHttpChannel::ContinuePrepareToConnect got credentials\n");
-    CallReplaceNonce(url);
+    CallReplaceNonce(cred);
   }
 
   return CallOrWaitForResume(

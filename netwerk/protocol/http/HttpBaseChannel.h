@@ -683,14 +683,14 @@ class HttpBaseChannel : public nsHashPropertyBag,
     StoreRequestObserversCalled(true);
   }
 
-  inline void CallReplaceNonce(nsACString& url) {
-    gHttpHandler->ReplaceNonce(this, url);
+  inline void CallReplaceNonce(Credential cred) {
+    gHttpHandler->ReplaceNonce(this, cred);
     printf("HttpBaseChannel::CallReplaceNonce called\n");
   }
 
-  inline mozilla::net::Credentials CallGetCredentials(nsACString& url) {
-    mozilla::net::Credentials cred = gHttpHandler->GetCredentials(url);
-    printf("HttpBaseChannel::CallGetCredentials called\n");
+  inline mozilla::net::Credential CallGetCredential(nsACString& url) {
+    mozilla::net::Credential cred = gHttpHandler->GetCredential(url);
+    printf("HttpBaseChannel::CallGetCredential called\n");
     return cred;
   }
 

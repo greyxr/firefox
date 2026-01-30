@@ -101,10 +101,10 @@ enum FrameCheckLevel {
   FRAMECHECK_STRICT
 };
 
-struct Credentials {
+struct Credential {
   nsCString nonce;
   nsCString actualCredential;
-  bool isEmpty() const {
+  bool IsEmpty() const {
     return nonce.IsEmpty() || actualCredential.IsEmpty();
   }
 };
@@ -128,11 +128,11 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   static already_AddRefed<nsHttpHandler> GetInstance();
 
-  NS_IMETHOD AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential) override;
+  NS_IMETHOD AddCredential(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential) override;
 
-  nsresult ReplaceNonce(nsIHttpChannel* chan, nsACString& url);
+  nsresult ReplaceNonce(nsIHttpChannel* chan, Credential cred);
 
-  Credentials GetCredentials(const nsACString& url);
+  Credential GetCredential(const nsACString& url);
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,
@@ -541,7 +541,7 @@ void OnRequestCredentials(nsIHttpChannel* chan) {
   [[nodiscard]] nsresult Init();
 
  public:
-  nsTHashMap<nsCStringHashKey, Credentials> mCredMap; 
+  nsTHashMap<nsCStringHashKey, Credential> mCredMap; 
 
  private:
   //

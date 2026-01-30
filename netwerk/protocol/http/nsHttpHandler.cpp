@@ -2217,20 +2217,6 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
 
   LOG(("nsHttpHandler::NewProxiedChannel [proxyInfo=%p]\n", givenProxyInfo));
 
-  // printf("current size start : %d\n", mCredMap.Count());
-  // for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
-  //   const nsACString& key = iter.Key();
-  //   printf("Key in Map: %s\n", PromiseFlatCString(key).get());
-  //   const char* key_stored = PromiseFlatCString(key).get();
-    
-  //   //PrintHex("http://127.0.0.1:5000/login", 27);
-  //   //PrintHex(key_stored, PromiseFlatCString(key).Length());
-  //   if (strcmp(key_stored, "http://127.0.0.1:5000/login") == 0){
-  //     printf("key is correct ------------------------------------------------\n");
-  //   }
-  //   break;
-  // }
-
   if (IsNeckoChild()) {
     httpChannel = new HttpChannelChild();
     
@@ -2247,58 +2233,6 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
     printf("SetupChannelInternal failed\n");
     return setup_result;
   }
-
-  // printf("current size start : %d\n", mCredMap.Count());
-  // for (auto iter = mCredMap.Iter(); !iter.Done(); iter.Next()) {
-  //   const nsACString& key = iter.Key();
-  //   printf("Key in Map: %s\n", PromiseFlatCString(key).get());
-  //   const char* key_stored = PromiseFlatCString(key).get();
-    
-  //   //PrintHex("http://127.0.0.1:5000/login", 27);
-  //   //PrintHex(key_stored, PromiseFlatCString(key).Length());
-  //   if (strcmp(key_stored, "http://127.0.0.1:5000/login") == 0){
-  //     printf("key is correct ------------------------------------------------\n");
-  //   }
-  //   break;
-  // }
-
-  // if (IsNeckoChild()) {
-  //     printf("Checking for URL... %s\n", uri->GetSpecOrDefault().get());
-      
-  //     if (uri) {
-  //       //printf("URI: %s, %s", uri->GetSpecOrDefault().get(), proxyURI->GetSpecOrDefault().get());
-  //       nsCString aKey = uri->GetSpecOrDefault();
-  //       aKey.Trim(" \t\r\n");
-  //       if (strcmp(aKey.get(), "http://127.0.0.1:5000/login") == 0){
-  //           //PrintHex(aKey.get(), aKey.Length());
-  //           printf("key is correct ------------------------------------------------\n");   
-  //           nsresult result = ReplaceNonce(httpChannel, aKey);
-  //           if(NS_FAILED(result)){
-  //             printf("Called to replace failed\n");
-  //           }
-  //       }
-
-  //       printf("current size: %d\n", mCredMap.Count());
-  //       if (mCredMap.Contains(aKey)) {
-  //         const Credentials& cred = mCredMap.Get(aKey);
-  //         //const Credentials& cred = entry.Data();
-  //         printf(
-  //           "Credentials found:\n"
-  //           "  nonce=%s\n"
-  //           "  actualCredential=%s\n",
-  //           cred.nonce.get(),
-  //           cred.actualCredential.get()
-  //         );
-  //         } else {
-  //           //printf("No credentials found for key=%s\n", aKey.get());
-  //           }
-  //     } else {
-  //       MYLOG(("No URI found"));
-  //     }
-    
-  // } else {
-
-  // }
 
   return setup_result;
 }
@@ -2670,9 +2604,9 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
 }
 
 NS_IMETHODIMP
-nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential)
+nsHttpHandler::AddCredential(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential)
 {
-  Credentials cred;
+  Credential cred;
   cred.nonce = nonce;
   cred.actualCredential = actualCredential;
   nsCOMPtr<nsIURI> uri;
@@ -2684,29 +2618,29 @@ nsHttpHandler::AddCredentials(const nsACString& url, const nsACString& nonce, co
   printf("ASCII HOST: %s\n", host.get());
   // formated_url.Trim(" \t\r\n");
   if (auto entry = mCredMap.Lookup(host)) {
-    const Credentials& cred = entry.Data();
-    printf("Credentials already found in map:\n"
+    const Credential& cred = entry.Data();
+    printf("Credential already found in map:\n"
       "  nonce=%s\n"
       "  actualCredential=%s\n",
       cred.nonce.get(),
       cred.actualCredential.get());
       } else {
-        printf("No credentials found for key, adding to map."); // =%s\n", url));
+        printf("No credential found for key, adding to map."); // =%s\n", url));
         mCredMap.InsertOrUpdate(host, std::move(cred));
         printf("Set debug info");
         // const nsACString aKey = url;
         if (auto entry = mCredMap.Lookup(host)) {
-          const Credentials& cred = entry.Data();
-          printf("Credentials found:\n"
+          const Credential& cred = entry.Data();
+          printf("Credential found:\n"
             "  nonce=%s\n"
             "  actualCredential=%s\n",
             cred.nonce.get(),
             cred.actualCredential.get());
             } else {
-              printf("No credentials found for key"); // =%s\n", url));
+              printf("No credential found for key"); // =%s\n", url));
             }
         }
-          printf("Finished setting credentials.");
+          printf("Finished setting credential.");
   return NS_OK;
 }
 
@@ -3240,143 +3174,108 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
       aExtraStringData);
 }
 
-  Credentials nsHttpHandler::GetCredentials(const nsACString& url){
+  Credential nsHttpHandler::GetCredential(const nsACString& url){
     nsCOMPtr<nsIURI> uri;
     NS_NewURI(getter_AddRefs(uri), url);
     nsCString host;
     uri->GetAsciiHost(host);
-    printf("Getting credentials for url: %s\n", host.get());
+    printf("Getting credential for url: %s\n", host.get());
     printf("ASCII HOST: %s\n", host.get());
     auto entry = mCredMap.Lookup(host);
     if (entry) {
-      const Credentials& cred = entry.Data();
-      printf("Credentials found:\n"
+      const Credential& cred = entry.Data();
+      printf("Credential found:\n"
         "  nonce=%s\n"
         "  actualCredential=%s\n",
         cred.nonce.get(),
         cred.actualCredential.get());
         return cred;
       } else {
-        printf("No credentials found for key\n"); // %s\n", url);
-        return Credentials();
+        printf("No credential found for key\n"); // %s\n", url);
+        return Credential();
       }
     }
 
   // The return for this function likely needs to be something else
   //  if there is an error then the calling function needs to handle it properly 
-  nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, nsACString& url){
-    printf("in replace nonce\n");
+  nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, Credential cred){
+  printf("ReplaceNonce: Starting\n");
+  
   nsCOMPtr<nsIUploadChannel> uploadChannel = do_QueryInterface(chan);
-  if (!uploadChannel) {
-    printf("nsHttpHandler: invalid channel\n");
+  nsCOMPtr<nsIInputStream> checkStream;
+  if (!uploadChannel || NS_FAILED(uploadChannel->GetUploadStream(getter_AddRefs(checkStream))) || !checkStream) {
+    printf("ReplaceNonce: No upload stream found\n");
     return NS_OK;
   }
 
-  nsCOMPtr<nsIInputStream> uploadStream;
-  uploadChannel->GetUploadStream(getter_AddRefs(uploadStream));
-  if (!uploadStream) {
-    printf("nsHttpHandler: invalid stream\n");
-    return NS_OK;
-  }
-
-  // Check if stream can be copied
-  nsCOMPtr<nsICloneableInputStream> cloneable = do_QueryInterface(uploadStream);
-  if (!cloneable) {
-    printf("nsHttpHandler: not cloneable\n");
-    return NS_OK;
-  }
-  nsCOMPtr<nsIInputStream> clonedStream;
-  cloneable->Clone(getter_AddRefs(clonedStream));
-
-  // Check what type of formating the request has
+  // Save original Content-Type
   nsAutoCString contentType;
   nsresult rv = chan->GetRequestHeader("Content-Type"_ns, contentType);
-
-  nsAutoCString mimeType;
-  nsAutoCString charset;
-
-  rv = NS_ParseRequestContentType(contentType, mimeType, charset);
   if (NS_FAILED(rv)) {
-    printf("nsHttpHandler: failed parsing request body\n");
+    printf("ReplaceNonce: No Content-Type header found\n");
+    contentType.Truncate();
+  } else {
+    printf("ReplaceNonce: Original Content-Type: %s\n", contentType.get());
+  }
+
+  // Read stream
+  nsCOMPtr<nsIInputStream> stream;
+  uploadChannel->GetUploadStream(getter_AddRefs(stream));
+  nsCString body;
+  rv = NS_ReadInputStreamToString(stream, body, -1);
+  if (NS_FAILED(rv)) {
+    printf("ReplaceNonce: Failed to read stream, rv=0x%x\n", static_cast<uint32_t>(rv));
+    return rv;
+  }
+  printf("ReplaceNonce: Original body (%zu bytes): %s\n", body.Length(), body.get());
+
+  // Replace nonce
+  int32_t pos = body.Find(cred.nonce);
+  if (pos < 0) {
+    printf("ReplaceNonce: Nonce not found in body\n");
     return NS_OK;
   }
+  printf("ReplaceNonce: Found nonce at position %d\n", pos);
+  
+  body.ReplaceSubstring(cred.nonce, cred.actualCredential);
+  printf("ReplaceNonce: Modified body (%zu bytes): %s\n", body.Length(), body.get());
 
-  printf("Parsed correctly\n");
-  if (NS_SUCCEEDED(rv)) {
-    printf("mimeType %s\n", mimeType.get());
-    if (mimeType.Equals("application/json")) {
-      nsCString jsonBytes;
-      nsresult rv = NS_ReadInputStreamToString(
-        clonedStream,
-        jsonBytes,
-        -1  // read all the bytes
-      );
-      if(NS_FAILED(rv)){
-        printf("nsHttpHandler: failed reading input stream\n");
-        return NS_OK;
-      }
-
-      const char* cstr_jsonBytes = jsonBytes.get();
-      printf("Initial JSON: %s\n", cstr_jsonBytes);
-
-      // Get credentials that were stored earlier from map
-      Credentials cred_values = mCredMap.Get(url);
-      nsCString nonce_fromMap = cred_values.nonce;
-      //const char* cstr_nonce = nonce_fromMap.get();
-      // size_t nonce_len = nonce_fromMap.Length(); 
-      nsCString real_secret = cred_values.actualCredential;
-      //const char* cstr_real_secret = real_secret.get();
-
-      // find if the nonce is in the json
-      // const char* start; // = strstr(cstr_jsonBytes, cstr_nonce);
-      uint32_t temp = jsonBytes.Find(nonce_fromMap, 0);
-      if((uint)temp >= 0){
-        jsonBytes.ReplaceSubstring(nonce_fromMap, real_secret);
-
-        // Clear from map
-        mCredMap.Remove(url);
-        printf("Changed JSON: %s\n", cstr_jsonBytes);
-      }
-      else{
-        printf("nsHttpHandler: nonce was not in request\n");
-        return NS_OK;
-      }
-
-      nsCString new_json_body(jsonBytes);
-
-      nsCOMPtr<nsIInputStream> outgoing_stream;
-      rv = NS_NewByteInputStream(
-          getter_AddRefs(outgoing_stream),
-          new_json_body,
-          NS_ASSIGNMENT_COPY   // makes an internal copy
-      );
-      if(NS_FAILED(rv)){
-        printf("nsHttpHandler: failed writing output stream\n");
-        return NS_OK;
-      }
-
-      rv = uploadChannel->SetUploadStream(
-          outgoing_stream,
-          "application/json"_ns,
-          new_json_body.Length()
-      );
-      if(NS_FAILED(rv)){
-        printf("nsHttpHandler: failed placing stream into channel\n");
-        return NS_OK;
-      }
-
-        MYLOG(("nsHttpHandler: Finished Replacement Correctly"));
-        return NS_OK;
-      }
-      else {
-        // No need to modify
-        return NS_OK;
-      }
-
-    }
-    else {
-      // No need to modify
-      return NS_OK;
-    }
+  // Create new stream and replace
+  nsCOMPtr<nsIInputStream> newStream;
+  rv = NS_NewByteInputStream(getter_AddRefs(newStream), body, NS_ASSIGNMENT_COPY);
+  if (NS_FAILED(rv)) {
+    printf("ReplaceNonce: Failed to create new stream, rv=0x%x\n", static_cast<uint32_t>(rv));
+    return rv;
   }
+
+  nsCOMPtr<nsIUploadChannel2> uploadChannel2 = do_QueryInterface(chan);
+  if (uploadChannel2) {
+    printf("ReplaceNonce: Using nsIUploadChannel2\n");
+    nsAutoCString method;
+    rv = chan->GetRequestMethod(method);
+    if (NS_FAILED(rv)) {
+      printf("ReplaceNonce: Failed to get request method, rv=0x%x\n", static_cast<uint32_t>(rv));
+      return rv;
+    }
+    printf("ReplaceNonce: Request method: %s\n", method.get());
+    rv = uploadChannel2->ExplicitSetUploadStream(newStream, contentType, body.Length(), method, false);
+  } else {
+    printf("ReplaceNonce: Falling back to nsIUploadChannel\n");
+    rv = uploadChannel->SetUploadStream(newStream, contentType, body.Length());
+  }
+  
+  if (NS_FAILED(rv)) {
+    printf("ReplaceNonce: Failed to set upload stream, rv=0x%x\n", static_cast<uint32_t>(rv));
+    return rv;
+  }
+
+  rv = chan->SetRequestHeader("Content-Length"_ns, nsPrintfCString("%zu", body.Length()), false);
+  if (NS_FAILED(rv)) {
+    printf("ReplaceNonce: Failed to set Content-Length header, rv=0x%x\n", static_cast<uint32_t>(rv));
+  }
+  printf("ReplaceNonce: Successfully replaced nonce and updated Content-Length to %zu\n", body.Length());
+  
+  return rv;
+}
+
 }  // namespace mozilla::net

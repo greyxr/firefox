@@ -184,9 +184,6 @@ namespace {
     ((mFirstResponseSource == RESPONSE_FROM_NETWORK) && \
      ((req) != mTransactionPump))))
 
-#define MYLOG(args) MOZ_LOG(gMyLog, mozilla::LogLevel::Debug, args)
-static mozilla::LazyLogModule gMyLog("my-on-modify-request");
-
 static NS_DEFINE_CID(kStreamListenerTeeCID, NS_STREAMLISTENERTEE_CID);
 
 enum ChannelDisposition {
@@ -9166,7 +9163,6 @@ nsHttpChannel::OnStartRequest(nsIRequest* request) {
           nsCOMPtr<nsIObserverService> obsService =
               services::GetObserverService();
           if (obsService)
-            // MYLOG(("nsHttpChannel: Notifying observers in nsHttpChannel"));
             obsService->NotifyObservers(static_cast<nsIHttpChannel*>(this),
                                         "httpchannel-fallback", nullptr);
           return NS_OK;

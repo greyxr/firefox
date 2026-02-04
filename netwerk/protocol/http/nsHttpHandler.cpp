@@ -144,8 +144,6 @@
 #define UA_PREF(_pref) UA_PREF_PREFIX _pref
 #define HTTP_PREF(_pref) HTTP_PREF_PREFIX _pref
 #define BROWSER_PREF(_pref) BROWSER_PREF_PREFIX _pref
-#define MYLOG(args) MOZ_LOG(gMyLog, mozilla::LogLevel::Debug, args)
-
 
 #define NS_HTTP_PROTOCOL_FLAGS \
   (URI_STD | ALLOWS_PROXY | ALLOWS_PROXY_HTTP | URI_LOADABLE_BY_ANYONE)
@@ -158,7 +156,6 @@ namespace mozilla::net {
 
 LazyLogModule gHttpLog("nsHttp");
 LazyLogModule gHttpIOLog("HttpIO");
-static mozilla::LazyLogModule gMyLog("my-on-modify-request");
 
 
 #ifdef ANDROID
@@ -897,9 +894,6 @@ nsresult nsHttpHandler::GetIOService(nsIIOService** result) {
 }
 
 void nsHttpHandler::NotifyObservers(nsIChannel* chan, const char* event) {
-  // MYLOG(("Before on-modify-request\n"));
-  // MYLOG(("nsHttpHandler::NotifyObservers [this=%p chan=%p event=\"%s\"]\n", this,
-     //  chan, event));
   nsCOMPtr<nsIObserverService> obsService = services::GetObserverService();
   if (obsService) obsService->NotifyObservers(chan, event, nullptr);
 }
@@ -2221,7 +2215,6 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
     httpChannel = new HttpChannelChild();
     
   } else {
-      // MYLOG(("Parent log: info %s", mDebugInfoFromWebRequest.get()));
     // HACK: make sure PSM gets initialized on the main thread.
     net_EnsurePSMInit();
     httpChannel = new nsHttpChannel();
@@ -2576,7 +2569,6 @@ nsresult nsHttpHandler::SpeculativeConnectInternal(
       nsPrintfCString debugHashKey("%s", ci->HashKey().get());
       obsService->NotifyObservers(nullptr, "speculative-connect-request",
                                   NS_ConvertUTF8toUTF16(debugHashKey).get());
-      MYLOG(("Notified in SpeculativeConnectInternal"));
       for (auto* cp :
            dom::ContentParent::AllProcesses(dom::ContentParent::eLive)) {
         PNeckoParent* neckoParent =

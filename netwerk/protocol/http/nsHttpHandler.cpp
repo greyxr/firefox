@@ -94,13 +94,6 @@
 
 #include <bitset>
 
-#include "jsapi.h"
-#include "js/CompilationAndEvaluation.h"
-#include "js/SourceText.h"
-#include "mozilla/dom/ScriptSettings.h"
-#include "js/JSON.h"
-#include "js/RootingAPI.h"
-
 #include <nsStringStream.h>
 #include "nsNetUtil.h"
 
@@ -2603,12 +2596,8 @@ nsHttpHandler::AddCredential(const nsACString& url, const nsACString& nonce, con
   cred.actualCredential = actualCredential;
   nsCOMPtr<nsIURI> uri;
   NS_NewURI(getter_AddRefs(uri), url);
-  // nsCString formated_url;
-  // uri->GetSpec(formated_url);
   nsCString host;
   uri->GetAsciiHost(host);
-  // printf("ASCII HOST: %s\n", host.get());
-  // formated_url.Trim(" \t\r\n");
   if (auto entry = mCredMap.Lookup(host)) {
     const Credential& cred = entry.Data();
     printf("Credential already found in map:\n"
@@ -2620,8 +2609,6 @@ nsHttpHandler::AddCredential(const nsACString& url, const nsACString& nonce, con
         printf("No credential found for key, adding to map."); // =%s\n", url));
         }
         mCredMap.InsertOrUpdate(host, std::move(cred));
-        printf("!!!!!!!!!!!!!!Set debug info!!!!!!!!!!!!!!!!!!!!!!");
-        // const nsACString aKey = url;
         if (auto entry = mCredMap.Lookup(host)) {
           const Credential& cred = entry.Data();
           printf("Credential found:\n"
@@ -3171,8 +3158,6 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
     NS_NewURI(getter_AddRefs(uri), url);
     nsCString host;
     uri->GetAsciiHost(host);
-    // printf("Getting credential for url: %s\n", host.get());
-    // printf("ASCII HOST: %s\n", host.get());
     auto entry = mCredMap.Lookup(host);
     if (entry) {
       const Credential& cred = entry.Data();
@@ -3183,7 +3168,6 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
         cred.actualCredential.get());
         return cred;
       } else {
-        // printf("No credential found for key\n"); // %s\n", url);
         return Credential();
       }
     }

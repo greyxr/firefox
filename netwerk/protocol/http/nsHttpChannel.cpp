@@ -824,13 +824,10 @@ nsresult nsHttpChannel::ContinuePrepareToConnect() {
   // notify "http-on-modify-request" observers
   CallOnModifyRequestObservers();
 
-  // TODO: I think the call to replace the nonce is fine here
   nsCString url = mURI->GetSpecOrDefault();
   // TODO: Error checking
-  // printf("nsHttpChannel::ContinuePrepareToConnect got URI: %s\n", url.get());
   mozilla::net::Credential cred = CallGetCredential(url);
   if (cred.IsEmpty()) {
-    // printf("nsHttpChannel::ContinuePrepareToConnect no credentials\n");
   } else {
     printf("nsHttpChannel::ContinuePrepareToConnect got credentials\n");
     CallReplaceNonce(cred, url);

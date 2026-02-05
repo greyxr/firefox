@@ -866,9 +866,6 @@ HttpBaseChannel::SetUploadStream(nsIInputStream* stream,
   // and so we select POST as the request method if contentType and
   // contentLength are unspecified.
 
-  nsIURI* uri = mURI;
-  printf("Hello %s\n", uri->GetSpecOrDefault().get());
-
   if (stream) {
     nsAutoCString method;
     bool hasHeaders = false;
@@ -1245,10 +1242,6 @@ HttpBaseChannel::ExplicitSetUploadStream(nsIInputStream* aStream,
   if (mURI) {
       mURI->GetSpec(uriSpec);
   }
-    
-  // } else {
-
-  // }
 
   LOG(("ANALYTICS: HttpBaseChannel::ExplicitSetUploadStream completed in %.3f ms [this=%p] [channelId=%llu] URL=%s\n",
        milliseconds, this, mChannelId, uriSpec.get()));

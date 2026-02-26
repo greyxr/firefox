@@ -542,10 +542,8 @@ void OnRequestCredentials(nsIHttpChannel* chan) {
 
   [[nodiscard]] nsresult Init();
 
- public:
-  nsTHashMap<nsCStringHashKey, Credential> mCredMap; 
+  nsTHashMap<nsCStringHashKey, Credential> mCredMap;
 
- private:
   //
   // Useragent/prefs helper methods
   //

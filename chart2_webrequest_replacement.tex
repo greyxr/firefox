@@ -1,0 +1,96 @@
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, shapes.misc, fit, backgrounds}
+
+\begin{document}
+\begin{tikzpicture}[
+  node distance=1.4cm and 2.5cm,
+  box/.style={rectangle, rounded corners=4pt, draw, minimum width=3.4cm, minimum height=0.8cm, align=center, font=\small},
+  actor/.style={rectangle, rounded corners=4pt, draw, fill=blue!10, minimum width=3.2cm, minimum height=0.8cm, align=center, font=\small\bfseries},
+  cppbox/.style={box, fill=orange!15},
+  decbox/.style={diamond, draw, fill=yellow!20, minimum width=2.8cm, minimum height=0.7cm, align=center, font=\footnotesize, aspect=2.5},
+  arrow/.style={-{Stealth[length=7pt]}, thick},
+  darrow/.style={-{Stealth[length=7pt]}, thick, dashed},
+  label/.style={font=\footnotesize, midway, above, sloped}
+]
+
+% Actors (top row)
+\node[actor] (extobs) {Extension\\onBeforeRequest};
+\node[actor, right=3.8cm of extobs] (channel) {nsHttpChannel\\(C++)};
+\node[actor, right=3.8cm of channel] (handler) {nsHttpHandler\\(C++)};
+\node[actor, right=3.8cm of handler] (network) {Network\\Stack};
+
+% Vertical timeline guides
+\draw[gray!40, dashed] (extobs.south) -- ++(0,-13.5cm);
+\draw[gray!40, dashed] (channel.south) -- ++(0,-13.5cm);
+\draw[gray!40, dashed] (handler.south) -- ++(0,-13.5cm);
+\draw[gray!40, dashed] (network.south) -- ++(0,-13.5cm);
+
+% Step 1: ContinuePrepareToConnect called
+\coordinate (s1) at ($(channel.south)+(0,-1cm)$);
+\node[cppbox, right=-1.7cm of s1] {\texttt{ContinuePrepareToConnect()}\\called};
+
+% Step 2: CallOnModifyRequestObservers fires extension hooks
+\coordinate (s2l) at ($(channel.south)+(0,-2.4cm)$);
+\coordinate (s2r) at ($(extobs.south)+(0,-2.4cm)$);
+\draw[arrow] (s2l) -- (s2r) node[label] {\texttt{CallOnModifyRequestObservers()}};
+
+% Step 2b: Extension sees nonce only
+\coordinate (s2b) at ($(extobs.south)+(0,-3.3cm)$);
+\node[box, fill=red!10, right=-1.7cm of s2b] {Extension sees\\nonce (not real password)};
+
+% Step 3: Return from observers
+\coordinate (s3l) at ($(extobs.south)+(0,-4.4cm)$);
+\coordinate (s3r) at ($(channel.south)+(0,-4.4cm)$);
+\draw[darrow] (s3l) -- (s3r) node[label] {observers complete};
+
+% Step 4: Lookup credential
+\coordinate (s4l) at ($(channel.south)+(0,-5.5cm)$);
+\coordinate (s4r) at ($(handler.south)+(0,-5.5cm)$);
+\draw[arrow] (s4l) -- (s4r) node[label] {\texttt{CallGetCredential(url)}};
+
+% Step 5: Decision diamond
+\coordinate (s5) at ($(handler.south)+(0,-6.8cm)$);
+\node[decbox] (decide) at (s5) {cred.IsEmpty()?};
+
+% Step 5 yes: no credential found
+\node[box, fill=gray!15, below=0.8cm of decide, xshift=-3cm] (noaction) {No credential found\\request proceeds unchanged};
+\draw[arrow] (decide.west) -| (noaction.north) node[pos=0.2, above, font=\footnotesize] {yes};
+
+% Step 5 no: go to ReplaceNonce
+\coordinate (s6l) at ($(channel.south)+(0,-8.4cm)$);
+\coordinate (s6r) at ($(handler.south)+(0,-8.4cm)$);
+\draw[arrow] ($(decide.east)+(0,0)$) -| (s6r) node[pos=0.6, above, font=\footnotesize] {no};
+\draw[arrow] ($(channel.south)+(0,-8.4cm)$) -- (s6r) node[label] {\texttt{CallReplaceNonce(cred, url)}};
+
+% Step 7: ReplaceNonce internals
+\coordinate (s7) at ($(handler.south)+(0,-9.6cm)$);
+\node[cppbox, right=-1.7cm of s7, text width=3.5cm] (replaceBox) {
+  Read upload stream\\
+  Find nonce in body\\
+  Replace with real cred\\
+  Create new stream\\
+  Update Content-Length
+};
+
+% Step 8: RemoveCredential
+\coordinate (s8) at ($(handler.south)+(0,-11.4cm)$);
+\node[cppbox, right=-1.7cm of s8] {\texttt{RemoveCredential(url)}\\(single-use, remove from map)};
+
+% Step 9: Request sent to network
+\coordinate (s9l) at ($(channel.south)+(0,-12.7cm)$);
+\coordinate (s9r) at ($(network.south)+(0,-12.7cm)$);
+\draw[arrow] (s9l) -- (s9r) node[label] {HTTP request with real credential};
+
+% Step labels
+\node[font=\footnotesize\itshape, gray] at ($(channel.south)+(-1.5,-1cm)$) {1};
+\node[font=\footnotesize\itshape, gray] at ($(channel.south)+(-0.2,-2.4cm)$) {2};
+\node[font=\footnotesize\itshape, gray] at ($(channel.south)+(-0.2,-5.5cm)$) {3};
+\node[font=\footnotesize\itshape, gray] at ($(handler.south)+(0.2,-6.8cm)$) {4};
+\node[font=\footnotesize\itshape, gray] at ($(channel.south)+(-0.2,-8.4cm)$) {5};
+\node[font=\footnotesize\itshape, gray] at ($(handler.south)+(0.2,-9.6cm)$) {6};
+\node[font=\footnotesize\itshape, gray] at ($(handler.south)+(0.2,-11.4cm)$) {7};
+\node[font=\footnotesize\itshape, gray] at ($(channel.south)+(-0.2,-12.7cm)$) {8};
+
+\end{tikzpicture}
+\end{document}

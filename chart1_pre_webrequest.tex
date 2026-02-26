@@ -1,0 +1,72 @@
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, backgrounds}
+
+\begin{document}
+\begin{tikzpicture}[
+  node distance=1.4cm and 2.5cm,
+  box/.style={rectangle, rounded corners=4pt, draw, minimum width=3.2cm, minimum height=0.8cm, align=center, font=\small},
+  actor/.style={rectangle, rounded corners=4pt, draw, fill=blue!10, minimum width=3.2cm, minimum height=0.8cm, align=center, font=\small\bfseries},
+  cppbox/.style={box, fill=orange!15},
+  jsbox/.style={box, fill=green!12},
+  extbox/.style={box, fill=blue!10},
+  webbox/.style={box, fill=purple!10},
+  arrow/.style={-{Stealth[length=7pt]}, thick},
+  darrow/.style={-{Stealth[length=7pt]}, thick, dashed},
+  label/.style={font=\footnotesize, midway, above, sloped}
+]
+
+% Actors (top row)
+\node[actor] (bitwarden) {Bitwarden Extension\\(JS)};
+\node[actor, right=4cm of bitwarden] (extapi) {ext-webRequest.js\\(Firefox JS)};
+\node[actor, right=4cm of extapi] (cpp) {nsHttpHandler\\(C++)};
+
+% Vertical timeline guides
+\draw[gray!40, dashed] (bitwarden.south) -- ++(0,-11cm);
+\draw[gray!40, dashed] (extapi.south) -- ++(0,-11cm);
+\draw[gray!40, dashed] (cpp.south) -- ++(0,-11cm);
+
+% Step 1: Extension calls handleCredentialReplacement
+\coordinate (s1l) at ($(bitwarden.south)+(0,-1cm)$);
+\coordinate (s1r) at ($(extapi.south)+(0,-1cm)$);
+\draw[arrow] (s1l) -- (s1r) node[label] {\texttt{handleCredentialReplacement(}};
+\node[font=\footnotesize, below=-0.1cm of s1r, xshift=-2.8cm] {\texttt{actualCredential, url)}};
+
+% Step 2: Generate UUID nonce
+\coordinate (s2) at ($(extapi.south)+(0,-2.2cm)$);
+\node[jsbox, right=-1.6cm of s2, yshift=0cm] (genNonce) {Generate UUID nonce\\via \texttt{nsIUUIDGenerator}};
+
+% Step 3: Call AddCredential via IDL
+\coordinate (s3l) at ($(extapi.south)+(0,-3.6cm)$);
+\coordinate (s3r) at ($(cpp.south)+(0,-3.6cm)$);
+\draw[arrow] (s3l) -- (s3r) node[label] {\texttt{config.AddCredential(url, nonce, cred)}};
+
+% Step 4: Parse URL, store in mCredMap
+\coordinate (s4) at ($(cpp.south)+(0,-4.8cm)$);
+\node[cppbox, right=-1.6cm of s4] (storeMap) {Parse URL host\\Store in \texttt{mCredMap[host]}};
+
+% Step 5: Return nonce to extension
+\coordinate (s5r) at ($(extapi.south)+(0,-6.1cm)$);
+\coordinate (s5l) at ($(cpp.south)+(0,-6.1cm)$);
+\draw[darrow] (s5l) -- (s5r) node[label] {\texttt{return NS\_OK}};
+
+% Step 6: Return nonce to Bitwarden
+\coordinate (s6r) at ($(bitwarden.south)+(0,-7.3cm)$);
+\coordinate (s6l) at ($(extapi.south)+(0,-7.3cm)$);
+\draw[darrow] (s6l) -- (s6r) node[label] {\texttt{return nonce (UUID string)}};
+
+% Step 7: Bitwarden autofills DOM with nonce
+\coordinate (s7) at ($(bitwarden.south)+(0,-8.6cm)$);
+\node[extbox, right=-1.6cm of s7] (autofill) {Autofill DOM password\\field with nonce\\(real password stays hidden)};
+
+% Labels on left margin
+\node[font=\footnotesize\itshape, gray, left=0.2cm of s1l] {1};
+\node[font=\footnotesize\itshape, gray, left=0.2cm of s2, xshift=0.8cm] {2};
+\node[font=\footnotesize\itshape, gray, left=0.2cm of s3l] {3};
+\node[font=\footnotesize\itshape, gray, left=0.2cm of s4, xshift=0.8cm] {4};
+\node[font=\footnotesize\itshape, gray, left=0.2cm of s5r] {5};
+\node[font=\footnotesize\itshape, gray, left=0.2cm of s6r] {6};
+\node[font=\footnotesize\itshape, gray, left=0.2cm of s7, xshift=0.8cm] {7};
+
+\end{tikzpicture}
+\end{document}

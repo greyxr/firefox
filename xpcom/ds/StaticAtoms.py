@@ -2044,6 +2044,7 @@ STATIC_ATOMS = [
     Atom("debugger", "debugger"),
     Atom("mozillaAddons", "mozillaAddons"),
     Atom("tabs", "tabs"),
+    Atom("secretStorage", "secretStorage"),
     Atom("webRequestBlocking", "webRequestBlocking"),
     Atom("webRequestFilterResponse_serviceWorkerScript", "webRequestFilterResponse.serviceWorkerScript"),
     Atom("blob", "blob"),

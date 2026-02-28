@@ -895,8 +895,8 @@ partial interface Window {
 
 partial interface Window {
   [SameObject, Throws,
-   Func="mozilla::dom::PasswordCredentialManager::IsEnabled"]
-  readonly attribute PasswordCredentialManager passwordCredentialManager;
+   Func="mozilla::dom::Secrets::IsEnabled"]
+  readonly attribute Secrets secrets;
 };
 
 // https://html.spec.whatwg.org/multipage/browsers.html#origin-keyed-agent-clusters

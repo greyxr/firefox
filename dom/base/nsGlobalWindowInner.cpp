@@ -112,7 +112,7 @@
 #include "mozilla/dom/ContentMediaController.h"
 #include "mozilla/dom/CookieStore.h"
 #include "mozilla/dom/Credential.h"
-#include "mozilla/dom/PasswordCredentialManager.h"
+#include "mozilla/dom/Secrets.h"
 #include "mozilla/dom/CustomElementRegistry.h"
 #include "mozilla/dom/DebuggerNotification.h"
 #include "mozilla/dom/DebuggerNotificationBinding.h"
@@ -1275,7 +1275,7 @@ void nsGlobalWindowInner::FreeInnerObjects() {
 
   mConsole = nullptr;
   mCookieStore = nullptr;
-  mPasswordCredentialManager = nullptr;
+  mSecrets = nullptr;
   mDocumentPiP = nullptr;
 
   mPaintWorklet = nullptr;
@@ -1472,7 +1472,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INTERNAL(nsGlobalWindowInner)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mCrypto)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mConsole)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mCookieStore)
-  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPasswordCredentialManager)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mSecrets)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mDocumentPiP)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPaintWorklet)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mExternal)
@@ -1590,7 +1590,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(nsGlobalWindowInner)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mCrypto)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mConsole)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mCookieStore)
-  NS_IMPL_CYCLE_COLLECTION_UNLINK(mPasswordCredentialManager)
+  NS_IMPL_CYCLE_COLLECTION_UNLINK(mSecrets)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mPaintWorklet)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mExternal)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mIntlUtils)
@@ -7410,12 +7410,12 @@ already_AddRefed<CookieStore> nsGlobalWindowInner::CookieStore() {
   return do_AddRef(mCookieStore);
 }
 
-already_AddRefed<dom::PasswordCredentialManager>
-nsGlobalWindowInner::PasswordCredentialManager() {
-  if (!mPasswordCredentialManager) {
-    mPasswordCredentialManager = new dom::PasswordCredentialManager(this);
+already_AddRefed<dom::Secrets> nsGlobalWindowInner::GetSecrets(
+    ErrorResult& aRv) {
+  if (!mSecrets) {
+    mSecrets = new dom::Secrets(this);
   }
-  return do_AddRef(mPasswordCredentialManager);
+  return do_AddRef(mSecrets);
 }
 
 DocumentPictureInPicture* nsGlobalWindowInner::DocumentPictureInPicture() {

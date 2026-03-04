@@ -824,13 +824,10 @@ nsresult nsHttpChannel::ContinuePrepareToConnect() {
   // notify "http-on-modify-request" observers
   CallOnModifyRequestObservers();
 
-  nsCString url = mURI->GetSpecOrDefault();
-  // TODO: Error checking
-  mozilla::net::Credential cred = CallGetCredential(url);
-  if (cred.IsEmpty()) {
-  } else {
-    printf("nsHttpChannel::ContinuePrepareToConnect got credentials\n");
-    CallReplaceNonce(cred, url);
+  uint64_t bcID = mLoadInfo->GetBrowsingContextID();
+  mozilla::net::Credential cred = CallGetCredential(bcID);
+  if (!cred.IsEmpty()) {
+    CallReplaceNonce(cred, bcID);
   }
 
   return CallOrWaitForResume(

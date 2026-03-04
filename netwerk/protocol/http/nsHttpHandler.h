@@ -29,7 +29,6 @@
 #include "nsTHashMap.h"
 #include "nsTHashSet.h"
 
-#include "nsIWebRequestConfig.h"
 
 #ifdef DEBUG
 #  include "nsIOService.h"
@@ -104,6 +103,7 @@ enum FrameCheckLevel {
 struct Credential {
   nsCString nonce;
   nsCString actualCredential;
+  nsTArray<nsCString> methods;
   bool IsEmpty() const {
     return nonce.IsEmpty() || actualCredential.IsEmpty();
   }
@@ -116,8 +116,7 @@ struct Credential {
 class nsHttpHandler final : public nsIHttpProtocolHandler,
                             public nsIObserver,
                             public nsSupportsWeakReference,
-                            public nsISpeculativeConnect,
-                            public nsIWebRequestConfig {
+                            public nsISpeculativeConnect {
  public:
   NS_DECL_THREADSAFE_ISUPPORTS
   NS_DECL_NSIPROTOCOLHANDLER
@@ -128,13 +127,13 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   static already_AddRefed<nsHttpHandler> GetInstance();
 
-  NS_IMETHOD AddCredential(const nsACString& url, const nsACString& nonce, const nsACString& actualCredential) override;
-
-  nsresult ReplaceNonce(nsIHttpChannel* chan, Credential cred, nsACString& url);
-
-  Credential GetCredential(const nsACString& url);
-
-  void RemoveCredential(const nsACString& url);
+  nsresult AddCredential(uint64_t aBcID, const nsACString& aNonce,
+                         const nsACString& aActualCredential,
+                         const nsTArray<nsCString>& aMethods);
+  Credential GetCredential(uint64_t aBcID);
+  void RemoveCredential(uint64_t aBcID);
+  nsresult ReplaceNonce(nsIHttpChannel* chan, const Credential& cred,
+                        uint64_t aBcID);
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,
@@ -542,7 +541,7 @@ void OnRequestCredentials(nsIHttpChannel* chan) {
 
   [[nodiscard]] nsresult Init();
 
-  nsTHashMap<nsCStringHashKey, Credential> mCredMap;
+  nsTHashMap<nsUint64HashKey, Credential> mCredMap;
 
   //
   // Useragent/prefs helper methods

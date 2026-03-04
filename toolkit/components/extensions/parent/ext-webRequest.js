@@ -10,24 +10,6 @@ ChromeUtils.defineESModuleGetters(this, {
   WebRequest: "resource://gre/modules/WebRequest.sys.mjs",
 });
 
-const uuidGenerator = Components.classes["@mozilla.org/uuid-generator;1"]
-  .getService(Components.interfaces.nsIUUIDGenerator);
-
-// Add this debug block temporarily:
-console.log("=== WebRequest Debug ===");
-// console.log("WebRequest object:", WebRequest);
-// console.log("onBeforeRequest exists:", !!WebRequest.onBeforeRequest);
-// console.log("onRequestCredentials exists:", !!WebRequest.onRequestCredentials);
-// console.log("Available WebRequest keys:", Object.keys(WebRequest));
-console.log("========================");
-
-console.log("Here")
-
-const { classes: Cc, interfaces: Ci } = Components;
-          const config = Cc["@mozilla.org/network/protocol;1?name=http"]
-                        .getService(Ci.nsIWebRequestConfig);
-          console.log("Got config", config);
-
 var { parseMatchPatterns, DefaultMap } = ExtensionUtils;
 
 const MAX_HANDLER_BEHAVIOR_CHANGED_CALLS_PER_10_MINUTES = 20;
@@ -269,17 +251,6 @@ this.webRequest = class extends ExtensionAPIPersistent {
 
           ChromeUtils.clearResourceCache({ target: "content" });
         },
-        handleCredentialReplacement: async (actualCredential, url) => {
-          console.log("Received credentials: ", actualCredential);
-          url = url.trim();
-          console.log("Received url: ", url);
-          let nonce = uuidGenerator.generateUUID().toString().slice(1, -1);
-          console.log("Generated Nonce: ", nonce);
-          console.log("Calling network method...");
-          config.AddCredential(url, nonce, actualCredential);
-          console.log("After AddCredentials");
-          return nonce;
-        }
       },
     };
   }

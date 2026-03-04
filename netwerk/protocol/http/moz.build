@@ -31,7 +31,7 @@ XPIDL_SOURCES += [
     "nsIRaceCacheWithNetwork.idl",
     "nsIReplacedHttpResponse.idl",
     "nsITlsHandshakeListener.idl",
-    "nsIWebRequestConfig.idl",
+
     "nsIWellKnownOpportunisticUtils.idl",
 ]
 
@@ -77,6 +77,7 @@ EXPORTS.mozilla.net += [
     "HttpTransactionParent.h",
     "HttpTransactionShell.h",
     "nsAHttpTransaction.h",
+    "nsHttpHandlerPageCredential.h",
     "nsServerTiming.h",
     "NullHttpChannel.h",
     "NullHttpTransaction.h",
@@ -162,6 +163,7 @@ UNIFIED_SOURCES += [
     "nsHttpConnectionInfo.cpp",
     "nsHttpConnectionMgr.cpp",
     "nsHttpDigestAuth.cpp",
+    "nsHttpHandlerPageCredential.cpp",
     "nsHttpHeaderArray.cpp",
     "nsHttpNTLMAuth.cpp",
     "nsHttpRequestHead.cpp",

@@ -683,13 +683,13 @@ class HttpBaseChannel : public nsHashPropertyBag,
     StoreRequestObserversCalled(true);
   }
 
-  inline void CallReplaceNonce(Credential cred, nsACString& url) {
-    gHttpHandler->ReplaceNonce(this, cred, url);
+  inline nsresult CallReplaceNonce(const mozilla::net::Credential& cred,
+                                   uint64_t aBcID) {
+    return gHttpHandler->ReplaceNonce(this, cred, aBcID);
   }
 
-  inline mozilla::net::Credential CallGetCredential(nsACString& url) {
-    mozilla::net::Credential cred = gHttpHandler->GetCredential(url);
-    return cred;
+  inline mozilla::net::Credential CallGetCredential(uint64_t aBcID) {
+    return gHttpHandler->GetCredential(aBcID);
   }
 
   // Helper function to simplify getting notification callbacks.

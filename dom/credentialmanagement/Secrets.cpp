@@ -1,9 +1,8 @@
 #include "mozilla/dom/Secrets.h"
 #include "mozilla/dom/SecretsBinding.h"
 #include "mozilla/dom/BrowsingContext.h"
-#include "nsIHttpProtocolHandler.h"
+#include "mozilla/net/NeckoChild.h"
 #include "nsIURI.h"
-#include "nsNetCID.h"
 
 namespace mozilla::dom {
 
@@ -34,19 +33,6 @@ void Secrets::RegisterNonce(const nsAString& aNonce, const nsAString& aSecret,
     return;
   }
 
-  nsresult rv;
-  nsCOMPtr<nsIHttpProtocolHandler> handler =
-      do_GetService(NS_NETWORK_PROTOCOL_CONTRACTID_PREFIX "http", &rv);
-  if (NS_FAILED(rv)) {
-    aRv.Throw(rv);
-    return;
-  }
-
-  nsTArray<nsCString> methods;
-  for (const auto& m : aMethods) {
-    methods.AppendElement(NS_ConvertUTF16toUTF8(m));
-  }
-
   nsCOMPtr<nsIURI> docURI = mParent->GetDocumentURI();
   if (!docURI) {
     aRv.Throw(NS_ERROR_FAILURE);
@@ -68,11 +54,18 @@ void Secrets::RegisterNonce(const nsAString& aNonce, const nsAString& aSecret,
     origin.AppendInt(port);
   }
 
-  rv = handler->AddCredential(bc->Id(), NS_ConvertUTF16toUTF8(aNonce),
-                              NS_ConvertUTF16toUTF8(aSecret), methods, origin);
-  if (NS_FAILED(rv)) {
-    aRv.Throw(rv);
+  nsTArray<nsCString> methods;
+  for (const auto& m : aMethods) {
+    methods.AppendElement(NS_ConvertUTF16toUTF8(m));
   }
+
+  if (!mozilla::net::gNeckoChild) {
+    aRv.Throw(NS_ERROR_NOT_INITIALIZED);
+    return;
+  }
+  mozilla::net::gNeckoChild->SendAddCredential(
+      bc->Id(), NS_ConvertUTF16toUTF8(aNonce), NS_ConvertUTF16toUTF8(aSecret),
+      methods, origin);
 }
 
 }  // namespace mozilla::dom

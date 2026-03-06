@@ -129,6 +129,9 @@ parent:
   async RequestContextAfterDOMContentLoaded(uint64_t rcid);
   async RemoveRequestContext(uint64_t rcid);
 
+  async AddCredential(uint64_t bcID, nsCString nonce, nsCString actualCredential,
+                      nsCString[] methods, nsCString origin);
+
   async PCacheEntryWriteHandle(PHttpChannel channel);
 
   async PAltDataOutputStream(nsCString type, int64_t predictedSize, PHttpChannel? channel, PCacheEntryWriteHandle? handle);

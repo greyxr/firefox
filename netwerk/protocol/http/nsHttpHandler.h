@@ -128,7 +128,7 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   static already_AddRefed<nsHttpHandler> GetInstance();
 
-  Credential GetCredential(uint64_t aBcID);
+  Credential GetCredential(uint64_t aBcID, const nsACString& aUrl);
   void RemoveCredential(uint64_t aBcID);
   nsresult ReplaceNonce(nsIHttpChannel* chan, const Credential& cred,
                         uint64_t aBcID);

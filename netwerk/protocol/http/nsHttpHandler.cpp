@@ -2596,6 +2596,7 @@ nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
   cred.methods = aMethods.Clone();
   cred.origin = aOrigin;
   mCredMap.InsertOrUpdate(aBcID, std::move(cred));
+  printf("[nsHttpHandler] AddCredential: map size after insert=%zu\n", mCredMap.Count());
   return NS_OK;
 }
 
@@ -3129,36 +3130,41 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
       aExtraStringData);
 }
 
-Credential nsHttpHandler::GetCredential(uint64_t aBcID) {
+Credential nsHttpHandler::GetCredential(uint64_t aBcID,
+                                         const nsACString& aUrl) {
   auto entry = mCredMap.Lookup(aBcID);
   if (entry) {
-    printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " found nonce=%s\n",
-           aBcID, entry.Data().nonce.get());
+    printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " url=%s found nonce=%s\n",
+           aBcID, PromiseFlatCString(aUrl).get(), entry.Data().nonce.get());
     return std::move(entry.Data());
   }
-  printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " not found\n", aBcID);
+  printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " url=%s not found\n",
+         aBcID, PromiseFlatCString(aUrl).get());
   return Credential();
 }
 
 void nsHttpHandler::RemoveCredential(uint64_t aBcID) {
-  printf("[nsHttpHandler] RemoveCredential: bcID=%" PRIu64 "\n", aBcID);
+  printf("[nsHttpHandler] RemoveCredential: bcID=%" PRIu64 " map size before=%zu\n",
+         aBcID, mCredMap.Count());
   mCredMap.Remove(aBcID);
 }
 
 nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cred,
                                      uint64_t aBcID) {
-  printf("[nsHttpHandler] ReplaceNonce: bcID=%" PRIu64 " nonce=%s\n", aBcID,
-         cred.nonce.get());
-
   nsCOMPtr<nsIURI> uri;
   nsresult rv = chan->GetURI(getter_AddRefs(uri));
   if (NS_FAILED(rv) || !uri) {
     return NS_ERROR_FAILURE;
   }
 
+  nsAutoCString uriSpec;
+  uri->GetSpec(uriSpec);
+  printf("[nsHttpHandler] ReplaceNonce: bcID=%" PRIu64 " url=%s nonce=%s\n",
+         aBcID, uriSpec.get(), cred.nonce.get());
+
   if (!uri->SchemeIs("https")) {
     printf("[nsHttpHandler] ReplaceNonce: not HTTPS, skipping\n");
-    return NS_OK;
+    // return NS_OK;
   }
 
   nsAutoCString scheme;

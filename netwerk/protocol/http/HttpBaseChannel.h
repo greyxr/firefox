@@ -689,7 +689,11 @@ class HttpBaseChannel : public nsHashPropertyBag,
   }
 
   inline mozilla::net::Credential CallGetCredential(uint64_t aBcID) {
-    return gHttpHandler->GetCredential(aBcID);
+    nsAutoCString uriSpec;
+    if (mURI) {
+      mURI->GetSpec(uriSpec);
+    }
+    return gHttpHandler->GetCredential(aBcID, uriSpec);
   }
 
   // Helper function to simplify getting notification callbacks.

@@ -17,6 +17,7 @@
 #include "nsHttpConnectionMgr.h"
 #include "nsHttpHandler.h"
 #include "nsHttpChannel.h"
+#include "HttpBaseChannel.h"
 #include "nsHTTPCompressConv.h"
 #include "nsHttpAuthCache.h"
 #include "nsStandardURL.h"
@@ -3164,13 +3165,13 @@ Credential nsHttpHandler::GetCredential(uint64_t aBcID,
 }
 
 void nsHttpHandler::RemoveCredential(uint64_t aBcID) {
-  printf("[nsHttpHandler] RemoveCredential: bcID=%" PRIu64 " map size before=%zu\n",
+  printf("[nsHttpHandler] RemoveCredential: bcID=%" PRIu64 " map size before=%u\n",
          aBcID, mCredMap.Count());
   mCredMap.Remove(aBcID);
 }
 
-nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cred,
-                                     uint64_t aBcID) {
+nsresult nsHttpHandler::ReplaceNonce(HttpBaseChannel* chan,
+                                     const Credential& cred, uint64_t aBcID) {
   nsCOMPtr<nsIURI> uri;
   nsresult rv = chan->GetURI(getter_AddRefs(uri));
   if (NS_FAILED(rv) || !uri) {
@@ -3221,23 +3222,12 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
     }
   }
 
-  nsCOMPtr<nsIUploadChannel> uploadChannel = do_QueryInterface(chan);
-  nsCOMPtr<nsIInputStream> checkStream;
-  if (!uploadChannel ||
-      NS_FAILED(uploadChannel->GetUploadStream(getter_AddRefs(checkStream))) ||
-      !checkStream) {
+  nsCOMPtr<nsIInputStream> stream;
+  if (NS_FAILED(chan->GetUploadStream(getter_AddRefs(stream))) || !stream) {
     printf("[nsHttpHandler] ReplaceNonce: no upload stream, skipping\n");
     return NS_OK;
   }
 
-  nsAutoCString contentType;
-  rv = chan->GetRequestHeader("Content-Type"_ns, contentType);
-  if (NS_FAILED(rv)) {
-    contentType.Truncate();
-  }
-
-  nsCOMPtr<nsIInputStream> stream;
-  uploadChannel->GetUploadStream(getter_AddRefs(stream));
   nsCString body;
   rv = NS_ReadInputStreamToString(stream, body, -1);
   if (NS_FAILED(rv)) {
@@ -3259,24 +3249,7 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
     return rv;
   }
 
-  nsCOMPtr<nsIUploadChannel2> uploadChannel2 = do_QueryInterface(chan);
-  if (uploadChannel2) {
-    nsAutoCString method;
-    rv = chan->GetRequestMethod(method);
-    if (NS_FAILED(rv)) {
-      return rv;
-    }
-    rv = uploadChannel2->ExplicitSetUploadStream(newStream, contentType,
-                                                  body.Length(), method, false);
-  } else {
-    rv = uploadChannel->SetUploadStream(newStream, contentType, body.Length());
-  }
-  if (NS_FAILED(rv)) {
-    return rv;
-  }
-
-  (void)chan->SetRequestHeader("Content-Length"_ns,
-                               nsPrintfCString("%zu", body.Length()), false);
+  chan->ReplaceUploadStream(newStream, body.Length());
   return NS_OK;
 }
 

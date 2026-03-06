@@ -654,6 +654,15 @@ class HttpBaseChannel : public nsHashPropertyBag,
     return gHttpHandler->ReplaceNonce(this, cred, aBcID);
   }
 
+ public:
+  void ReplaceUploadStream(nsIInputStream* aStream, int64_t aLength) {
+    mUploadStream = aStream;
+    mReqContentLength = aLength;
+    SetRequestHeader("Content-Length"_ns, nsPrintfCString("%" PRId64, aLength),
+                     false);
+  }
+
+ protected:
   inline mozilla::net::Credential CallGetCredential(uint64_t aBcID) {
     nsAutoCString uriSpec;
     if (mURI) {

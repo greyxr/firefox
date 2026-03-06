@@ -133,7 +133,7 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   Credential GetCredential(uint64_t aBcID, const nsACString& aUrl);
   void RemoveCredential(uint64_t aBcID);
-  nsresult ReplaceNonce(nsIHttpChannel* chan, const Credential& cred,
+  nsresult ReplaceNonce(HttpBaseChannel* chan, const Credential& cred,
                         uint64_t aBcID);
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(

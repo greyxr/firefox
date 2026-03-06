@@ -104,6 +104,7 @@ struct Credential {
   nsCString nonce;
   nsCString actualCredential;
   nsTArray<nsCString> methods;
+  nsCString origin;
   bool IsEmpty() const {
     return nonce.IsEmpty() || actualCredential.IsEmpty();
   }
@@ -127,9 +128,6 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
 
   static already_AddRefed<nsHttpHandler> GetInstance();
 
-  nsresult AddCredential(uint64_t aBcID, const nsACString& aNonce,
-                         const nsACString& aActualCredential,
-                         const nsTArray<nsCString>& aMethods);
   Credential GetCredential(uint64_t aBcID);
   void RemoveCredential(uint64_t aBcID);
   nsresult ReplaceNonce(nsIHttpChannel* chan, const Credential& cred,

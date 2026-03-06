@@ -2582,15 +2582,19 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
                                     aAnonymous);
 }
 
-nsresult nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
-                                      const nsACString& aActualCredential,
-                                      const nsTArray<nsCString>& aMethods) {
-  printf("[nsHttpHandler] AddCredential: bcID=%" PRIu64 " nonce=%s\n", aBcID,
-         PromiseFlatCString(aNonce).get());
+NS_IMETHODIMP
+nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
+                             const nsACString& aActualCredential,
+                             const nsTArray<nsCString>& aMethods,
+                             const nsACString& aOrigin) {
+  printf("[nsHttpHandler] AddCredential: bcID=%" PRIu64 " nonce=%s origin=%s\n",
+         aBcID, PromiseFlatCString(aNonce).get(),
+         PromiseFlatCString(aOrigin).get());
   Credential cred;
   cred.nonce = aNonce;
   cred.actualCredential = aActualCredential;
   cred.methods = aMethods.Clone();
+  cred.origin = aOrigin;
   mCredMap.InsertOrUpdate(aBcID, std::move(cred));
   return NS_OK;
 }
@@ -3145,6 +3149,39 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
                                      uint64_t aBcID) {
   printf("[nsHttpHandler] ReplaceNonce: bcID=%" PRIu64 " nonce=%s\n", aBcID,
          cred.nonce.get());
+
+  nsCOMPtr<nsIURI> uri;
+  nsresult rv = chan->GetURI(getter_AddRefs(uri));
+  if (NS_FAILED(rv) || !uri) {
+    return NS_ERROR_FAILURE;
+  }
+
+  if (!uri->SchemeIs("https")) {
+    printf("[nsHttpHandler] ReplaceNonce: not HTTPS, skipping\n");
+    return NS_OK;
+  }
+
+  nsAutoCString scheme;
+  nsAutoCString host;
+  int32_t port = -1;
+  uri->GetScheme(scheme);
+  uri->GetAsciiHost(host);
+  uri->GetPort(&port);
+  nsAutoCString requestOrigin;
+  requestOrigin.Assign(scheme);
+  requestOrigin.AppendLiteral("://");
+  requestOrigin.Append(host);
+  if (port != -1) {
+    requestOrigin.Append(':');
+    requestOrigin.AppendInt(port);
+  }
+
+  if (!cred.origin.Equals(requestOrigin)) {
+    printf("[nsHttpHandler] ReplaceNonce: origin mismatch (%s vs %s), skipping\n",
+           cred.origin.get(), requestOrigin.get());
+    return NS_OK;
+  }
+
   if (!cred.methods.IsEmpty()) {
     nsAutoCString method;
     nsresult rv = chan->GetRequestMethod(method);
@@ -3168,7 +3205,7 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
   }
 
   nsAutoCString contentType;
-  nsresult rv = chan->GetRequestHeader("Content-Type"_ns, contentType);
+  rv = chan->GetRequestHeader("Content-Type"_ns, contentType);
   if (NS_FAILED(rv)) {
     contentType.Truncate();
   }

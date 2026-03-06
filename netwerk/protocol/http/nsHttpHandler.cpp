@@ -2200,7 +2200,7 @@ nsHttpHandler::NewProxiedChannel(nsIURI* uri, nsIProxyInfo* givenProxyInfo,
 
   if (IsNeckoChild()) {
     httpChannel = new HttpChannelChild();
-    
+
   } else {
     // HACK: make sure PSM gets initialized on the main thread.
     net_EnsurePSMInit();
@@ -3160,6 +3160,7 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
   nsCOMPtr<nsIURI> uri;
   nsresult rv = chan->GetURI(getter_AddRefs(uri));
   if (NS_FAILED(rv) || !uri) {
+    RemoveCredential(aBcID);
     return NS_ERROR_FAILURE;
   }
 
@@ -3170,7 +3171,8 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
 
   if (!uri->SchemeIs("https")) {
     printf("[nsHttpHandler] ReplaceNonce: not HTTPS, skipping\n");
-    // return NS_OK;
+    RemoveCredential(aBcID);
+    return NS_OK;
   }
 
   nsAutoCString scheme;
@@ -3191,6 +3193,7 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
   if (!cred.origin.Equals(requestOrigin)) {
     printf("[nsHttpHandler] ReplaceNonce: origin mismatch (%s vs %s), skipping\n",
            cred.origin.get(), requestOrigin.get());
+    RemoveCredential(aBcID);
     return NS_OK;
   }
 
@@ -3203,6 +3206,7 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
     printf("[nsHttpHandler] ReplaceNonce: request method=%s\n", method.get());
     if (!cred.methods.Contains(method)) {
       printf("[nsHttpHandler] ReplaceNonce: method not in policy, skipping\n");
+      RemoveCredential(aBcID);
       return NS_OK;
     }
   }
@@ -3213,6 +3217,7 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
       NS_FAILED(uploadChannel->GetUploadStream(getter_AddRefs(checkStream))) ||
       !checkStream) {
     printf("[nsHttpHandler] ReplaceNonce: no upload stream, skipping\n");
+    RemoveCredential(aBcID);
     return NS_OK;
   }
 
@@ -3232,6 +3237,7 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
 
   if (body.Find(cred.nonce) < 0) {
     printf("[nsHttpHandler] ReplaceNonce: nonce not found in body\n");
+    RemoveCredential(aBcID);
     return NS_OK;
   }
 

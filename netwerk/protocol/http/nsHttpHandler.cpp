@@ -2596,7 +2596,7 @@ nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
   cred.methods = aMethods.Clone();
   cred.origin = aOrigin;
   mCredMap.InsertOrUpdate(aBcID, std::move(cred));
-  printf("[nsHttpHandler] AddCredential: map size after insert=%zu\n", mCredMap.Count());
+  printf("[nsHttpHandler] AddCredential: map size after insert=%u\n", mCredMap.Count());
   return NS_OK;
 }
 
@@ -3134,9 +3134,15 @@ Credential nsHttpHandler::GetCredential(uint64_t aBcID,
                                          const nsACString& aUrl) {
   auto entry = mCredMap.Lookup(aBcID);
   if (entry) {
+    const Credential& data = entry.Data();
     printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " url=%s found nonce=%s\n",
-           aBcID, PromiseFlatCString(aUrl).get(), entry.Data().nonce.get());
-    return std::move(entry.Data());
+           aBcID, PromiseFlatCString(aUrl).get(), data.nonce.get());
+    Credential copy;
+    copy.nonce = data.nonce;
+    copy.actualCredential = data.actualCredential;
+    copy.methods = data.methods.Clone();
+    copy.origin = data.origin;
+    return copy;
   }
   printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " url=%s not found\n",
          aBcID, PromiseFlatCString(aUrl).get());
@@ -3224,13 +3230,14 @@ nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cre
     return rv;
   }
 
-  if (body.Find(cred.nonce) >= 0) {
-    printf("[nsHttpHandler] ReplaceNonce: nonce found in body, replacing\n");
-    body.ReplaceSubstring(cred.nonce, cred.actualCredential);
-    RemoveCredential(aBcID);
-  } else {
+  if (body.Find(cred.nonce) < 0) {
     printf("[nsHttpHandler] ReplaceNonce: nonce not found in body\n");
+    return NS_OK;
   }
+
+  printf("[nsHttpHandler] ReplaceNonce: nonce found in body, replacing\n");
+  body.ReplaceSubstring(cred.nonce, cred.actualCredential);
+  RemoveCredential(aBcID);
 
   nsCOMPtr<nsIInputStream> newStream;
   rv = NS_NewByteInputStream(getter_AddRefs(newStream), body, NS_ASSIGNMENT_COPY);

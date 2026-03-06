@@ -824,10 +824,12 @@ nsresult nsHttpChannel::ContinuePrepareToConnect() {
   // notify "http-on-modify-request" observers
   CallOnModifyRequestObservers();
 
-  uint64_t bcID = mLoadInfo->GetBrowsingContextID();
-  mozilla::net::Credential cred = CallGetCredential(bcID);
-  if (!cred.IsEmpty()) {
-    CallReplaceNonce(cred, bcID);
+  if (mUploadStream) {
+    uint64_t bcID = mLoadInfo->GetBrowsingContextID();
+    mozilla::net::Credential cred = CallGetCredential(bcID);
+    if (!cred.IsEmpty()) {
+      CallReplaceNonce(cred, bcID);
+    }
   }
 
   return CallOrWaitForResume(

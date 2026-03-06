@@ -107,6 +107,7 @@ class ClientSource;
 class Console;
 class CookieStore;
 class Crypto;
+class Secrets;
 class CustomElementRegistry;
 class DataTransfer;
 class DocGroup;
@@ -668,6 +669,8 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
                                                      mozilla::ErrorResult& aRv);
 
   already_AddRefed<mozilla::dom::CookieStore> CookieStore();
+
+  already_AddRefed<mozilla::dom::Secrets> GetSecrets(mozilla::ErrorResult& aRv);
 
   mozilla::dom::DocumentPictureInPicture* GetExtantDocumentPictureInPicture()
       const override {
@@ -1412,6 +1415,7 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
   RefPtr<mozilla::dom::cache::CacheStorage> mCacheStorage;
   RefPtr<mozilla::dom::Console> mConsole;
   RefPtr<mozilla::dom::CookieStore> mCookieStore;
+  RefPtr<mozilla::dom::Secrets> mSecrets;
   RefPtr<mozilla::dom::DocumentPictureInPicture> mDocumentPiP;
   RefPtr<mozilla::dom::Worklet> mPaintWorklet;
   RefPtr<mozilla::dom::External> mExternal;

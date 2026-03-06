@@ -91,6 +91,17 @@ interface nsIHttpProtocolHandler : nsIProxiedProtocolHandler
      * Clears the CORS preflight cache.
      */
     void clearCORSPreflightCache();
+
+    /**
+     * Register a nonce-to-credential mapping for a browsing context.
+     * The nonce in the request body will be replaced with the actual
+     * credential before the request is sent over the network.
+     */
+    void addCredential(in unsigned long long bcID,
+                       in ACString nonce,
+                       in ACString actualCredential,
+                       in Array<ACString> methods,
+                       in ACString origin);
 };
 
 %{C++

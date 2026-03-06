@@ -7,6 +7,7 @@
 // HttpLog.h should generally be included first
 #include "HttpLog.h"
 
+#include <inttypes.h>
 #include "prsystem.h"
 
 #include "AltServiceChild.h"
@@ -19,6 +20,7 @@
 #include "nsHTTPCompressConv.h"
 #include "nsHttpAuthCache.h"
 #include "nsStandardURL.h"
+#include "nsString.h"
 #include "LoadContextInfo.h"
 #include "nsCategoryManagerUtils.h"
 #include "nsDirectoryServiceDefs.h"
@@ -96,6 +98,9 @@
 #include "TRRServiceChannel.h"
 
 #include <bitset>
+
+#include <nsStringStream.h>
+#include "nsNetUtil.h"
 
 #if defined(XP_UNIX)
 #  include <sys/utsname.h>
@@ -901,8 +906,6 @@ nsresult nsHttpHandler::GetIOService(nsIIOService** result) {
 }
 
 void nsHttpHandler::NotifyObservers(nsIChannel* chan, const char* event) {
-  LOG(("nsHttpHandler::NotifyObservers [this=%p chan=%p event=\"%s\"]\n", this,
-       chan, event));
   nsCOMPtr<nsIObserverService> obsService = services::GetObserverService();
   if (obsService) obsService->NotifyObservers(chan, event, nullptr);
 }
@@ -2593,6 +2596,24 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
                                     aAnonymous);
 }
 
+NS_IMETHODIMP
+nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
+                             const nsACString& aActualCredential,
+                             const nsTArray<nsCString>& aMethods,
+                             const nsACString& aOrigin) {
+  printf("[nsHttpHandler] AddCredential: bcID=%" PRIu64 " nonce=%s origin=%s\n",
+         aBcID, PromiseFlatCString(aNonce).get(),
+         PromiseFlatCString(aOrigin).get());
+  Credential cred;
+  cred.nonce = aNonce;
+  cred.actualCredential = aActualCredential;
+  cred.methods = aMethods.Clone();
+  cred.origin = aOrigin;
+  mCredMap.InsertOrUpdate(aBcID, std::move(cred));
+  printf("[nsHttpHandler] AddCredential: map size after insert=%u\n", mCredMap.Count());
+  return NS_OK;
+}
+
 NS_IMETHODIMP nsHttpHandler::SpeculativeConnectWithOriginAttributes(
     nsIURI* aURI, JS::Handle<JS::Value> aOriginAttributes,
     nsIInterfaceRequestor* aCallbacks, bool aAnonymous, JSContext* aCx) {
@@ -3121,6 +3142,142 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
   (void)mActivityDistributor->ObserveActivityWithArgs(
       aArgs, aActivityType, aActivitySubtype, aTimestamp, aExtraSizeData,
       aExtraStringData);
+}
+
+Credential nsHttpHandler::GetCredential(uint64_t aBcID,
+                                         const nsACString& aUrl) {
+  auto entry = mCredMap.Lookup(aBcID);
+  if (entry) {
+    const Credential& data = entry.Data();
+    printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " url=%s found nonce=%s\n",
+           aBcID, PromiseFlatCString(aUrl).get(), data.nonce.get());
+    Credential copy;
+    copy.nonce = data.nonce;
+    copy.actualCredential = data.actualCredential;
+    copy.methods = data.methods.Clone();
+    copy.origin = data.origin;
+    return copy;
+  }
+  printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " url=%s not found\n",
+         aBcID, PromiseFlatCString(aUrl).get());
+  return Credential();
+}
+
+void nsHttpHandler::RemoveCredential(uint64_t aBcID) {
+  printf("[nsHttpHandler] RemoveCredential: bcID=%" PRIu64 " map size before=%zu\n",
+         aBcID, mCredMap.Count());
+  mCredMap.Remove(aBcID);
+}
+
+nsresult nsHttpHandler::ReplaceNonce(nsIHttpChannel* chan, const Credential& cred,
+                                     uint64_t aBcID) {
+  nsCOMPtr<nsIURI> uri;
+  nsresult rv = chan->GetURI(getter_AddRefs(uri));
+  if (NS_FAILED(rv) || !uri) {
+    return NS_ERROR_FAILURE;
+  }
+
+  nsAutoCString uriSpec;
+  uri->GetSpec(uriSpec);
+  printf("[nsHttpHandler] ReplaceNonce: bcID=%" PRIu64 " url=%s nonce=%s\n",
+         aBcID, uriSpec.get(), cred.nonce.get());
+
+  if (!uri->SchemeIs("https")) {
+    printf("[nsHttpHandler] ReplaceNonce: not HTTPS, skipping\n");
+    // return NS_OK;
+  }
+
+  nsAutoCString scheme;
+  nsAutoCString host;
+  int32_t port = -1;
+  uri->GetScheme(scheme);
+  uri->GetAsciiHost(host);
+  uri->GetPort(&port);
+  nsAutoCString requestOrigin;
+  requestOrigin.Assign(scheme);
+  requestOrigin.AppendLiteral("://");
+  requestOrigin.Append(host);
+  if (port != -1) {
+    requestOrigin.Append(':');
+    requestOrigin.AppendInt(port);
+  }
+
+  if (!cred.origin.Equals(requestOrigin)) {
+    printf("[nsHttpHandler] ReplaceNonce: origin mismatch (%s vs %s), skipping\n",
+           cred.origin.get(), requestOrigin.get());
+    return NS_OK;
+  }
+
+  if (!cred.methods.IsEmpty()) {
+    nsAutoCString method;
+    nsresult rv = chan->GetRequestMethod(method);
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+    printf("[nsHttpHandler] ReplaceNonce: request method=%s\n", method.get());
+    if (!cred.methods.Contains(method)) {
+      printf("[nsHttpHandler] ReplaceNonce: method not in policy, skipping\n");
+      return NS_OK;
+    }
+  }
+
+  nsCOMPtr<nsIUploadChannel> uploadChannel = do_QueryInterface(chan);
+  nsCOMPtr<nsIInputStream> checkStream;
+  if (!uploadChannel ||
+      NS_FAILED(uploadChannel->GetUploadStream(getter_AddRefs(checkStream))) ||
+      !checkStream) {
+    printf("[nsHttpHandler] ReplaceNonce: no upload stream, skipping\n");
+    return NS_OK;
+  }
+
+  nsAutoCString contentType;
+  rv = chan->GetRequestHeader("Content-Type"_ns, contentType);
+  if (NS_FAILED(rv)) {
+    contentType.Truncate();
+  }
+
+  nsCOMPtr<nsIInputStream> stream;
+  uploadChannel->GetUploadStream(getter_AddRefs(stream));
+  nsCString body;
+  rv = NS_ReadInputStreamToString(stream, body, -1);
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+
+  if (body.Find(cred.nonce) < 0) {
+    printf("[nsHttpHandler] ReplaceNonce: nonce not found in body\n");
+    return NS_OK;
+  }
+
+  printf("[nsHttpHandler] ReplaceNonce: nonce found in body, replacing\n");
+  body.ReplaceSubstring(cred.nonce, cred.actualCredential);
+  RemoveCredential(aBcID);
+
+  nsCOMPtr<nsIInputStream> newStream;
+  rv = NS_NewByteInputStream(getter_AddRefs(newStream), body, NS_ASSIGNMENT_COPY);
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+
+  nsCOMPtr<nsIUploadChannel2> uploadChannel2 = do_QueryInterface(chan);
+  if (uploadChannel2) {
+    nsAutoCString method;
+    rv = chan->GetRequestMethod(method);
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+    rv = uploadChannel2->ExplicitSetUploadStream(newStream, contentType,
+                                                  body.Length(), method, false);
+  } else {
+    rv = uploadChannel->SetUploadStream(newStream, contentType, body.Length());
+  }
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+
+  (void)chan->SetRequestHeader("Content-Length"_ns,
+                               nsPrintfCString("%zu", body.Length()), false);
+  return NS_OK;
 }
 
 }  // namespace mozilla::net

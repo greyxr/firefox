@@ -649,6 +649,19 @@ class HttpBaseChannel : public nsHashPropertyBag,
     StoreRequestObserversCalled(true);
   }
 
+  inline nsresult CallReplaceNonce(const mozilla::net::Credential& cred,
+                                   uint64_t aBcID) {
+    return gHttpHandler->ReplaceNonce(this, cred, aBcID);
+  }
+
+  inline mozilla::net::Credential CallGetCredential(uint64_t aBcID) {
+    nsAutoCString uriSpec;
+    if (mURI) {
+      mURI->GetSpec(uriSpec);
+    }
+    return gHttpHandler->GetCredential(aBcID, uriSpec);
+  }
+
   // Helper function to simplify getting notification callbacks.
   template <class T>
   void GetCallback(nsCOMPtr<T>& aResult) {

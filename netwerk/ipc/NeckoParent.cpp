@@ -661,6 +661,16 @@ mozilla::ipc::IPCResult NeckoParent::RecvRemoveRequestContext(
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult NeckoParent::RecvAddCredential(
+    const uint64_t& bcID, const nsCString& nonce,
+    const nsCString& actualCredential, nsTArray<nsCString>&& methods,
+    const nsCString& origin) {
+  if (gHttpHandler) {
+    gHttpHandler->AddCredential(bcID, nonce, actualCredential, methods, origin);
+  }
+  return IPC_OK();
+}
+
 mozilla::ipc::IPCResult NeckoParent::RecvGetExtensionStream(
     nsIURI* aURI, GetExtensionStreamResolver&& aResolve) {
   if (!aURI) {

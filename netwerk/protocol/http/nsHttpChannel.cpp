@@ -826,6 +826,14 @@ nsresult nsHttpChannel::ContinuePrepareToConnect() {
   // notify "http-on-modify-request" observers
   CallOnModifyRequestObservers();
 
+  if (mUploadStream) {
+    uint64_t bcID = mLoadInfo->GetBrowsingContextID();
+    mozilla::net::Credential cred = CallGetCredential(bcID);
+    if (!cred.IsEmpty()) {
+      CallReplaceNonce(cred, bcID);
+    }
+  }
+
   return CallOrWaitForResume(
       [](auto* self) { return self->OnBeforeConnect(); });
 }

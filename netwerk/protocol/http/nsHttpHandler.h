@@ -103,6 +103,16 @@ enum FrameCheckLevel {
   FRAMECHECK_STRICT
 };
 
+struct Credential {
+  nsCString nonce;
+  nsCString actualCredential;
+  nsTArray<nsCString> methods;
+  nsCString origin;
+  bool IsEmpty() const {
+    return nonce.IsEmpty() || actualCredential.IsEmpty();
+  }
+};
+
 //-----------------------------------------------------------------------------
 // nsHttpHandler - protocol handler for HTTP and HTTPS
 //-----------------------------------------------------------------------------
@@ -120,6 +130,11 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
   NS_DECL_NSISPECULATIVECONNECT
 
   static already_AddRefed<nsHttpHandler> GetInstance();
+
+  Credential GetCredential(uint64_t aBcID, const nsACString& aUrl);
+  void RemoveCredential(uint64_t aBcID);
+  nsresult ReplaceNonce(nsIHttpChannel* chan, const Credential& cred,
+                        uint64_t aBcID);
 
   [[nodiscard]] nsresult AddAcceptAndDictionaryHeaders(
       nsIURI* aURI, ExtContentPolicyType aType, nsHttpRequestHead* aRequest,
@@ -523,6 +538,8 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
   virtual ~nsHttpHandler();
 
   [[nodiscard]] nsresult Init();
+
+  nsTHashMap<nsUint64HashKey, Credential> mCredMap;
 
   //
   // Useragent/prefs helper methods

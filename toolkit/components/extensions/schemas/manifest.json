@@ -554,7 +554,7 @@
           { "$ref": "PermissionPrivileged" },
           {
             "type": "string",
-            "enum": ["alarms", "storage", "unlimitedStorage"]
+            "enum": ["alarms", "secretStorage", "storage", "unlimitedStorage"]
           }
         ]
       },

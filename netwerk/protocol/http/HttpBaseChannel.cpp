@@ -112,6 +112,7 @@
 #include "mozilla/net/SFVService.h"
 #include "mozilla/dom/ContentChild.h"
 #include "nsQueryObject.h"
+#include "nsHttpHandler.h"
 
 using mozilla::dom::ForceMediaDocument;
 using mozilla::dom::RequestMode;

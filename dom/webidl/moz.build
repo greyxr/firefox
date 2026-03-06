@@ -897,6 +897,7 @@ WEBIDL_FILES = [
     "ScreenOrientation.webidl",
     "ScriptProcessorNode.webidl",
     "ScrollAreaEvent.webidl",
+    "Secrets.webidl",
     "Selection.webidl",
     "ServiceWorker.webidl",
     "ServiceWorkerContainer.webidl",

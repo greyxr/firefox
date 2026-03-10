@@ -25,7 +25,6 @@ JSObject* Secrets::WrapObject(JSContext* aCx,
 bool Secrets::IsEnabled(JSContext* aCx, JSObject* aGlobal) { return true; }
 
 void Secrets::RegisterNonce(const nsAString& aNonce, const nsAString& aSecret,
-                            const nsTArray<nsString>& aMethods,
                             ErrorResult& aRv) {
   BrowsingContext* bc = mParent->GetBrowsingContext();
   if (!bc) {
@@ -54,18 +53,13 @@ void Secrets::RegisterNonce(const nsAString& aNonce, const nsAString& aSecret,
     origin.AppendInt(port);
   }
 
-  nsTArray<nsCString> methods;
-  for (const auto& m : aMethods) {
-    methods.AppendElement(NS_ConvertUTF16toUTF8(m));
-  }
-
   if (!mozilla::net::gNeckoChild) {
     aRv.Throw(NS_ERROR_NOT_INITIALIZED);
     return;
   }
   mozilla::net::gNeckoChild->SendAddCredential(
       bc->Id(), NS_ConvertUTF16toUTF8(aNonce), NS_ConvertUTF16toUTF8(aSecret),
-      methods, origin);
+      origin);
 }
 
 }  // namespace mozilla::dom

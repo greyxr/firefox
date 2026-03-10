@@ -100,7 +100,6 @@ interface nsIHttpProtocolHandler : nsIProxiedProtocolHandler
     void addCredential(in unsigned long long bcID,
                        in ACString nonce,
                        in ACString actualCredential,
-                       in Array<ACString> methods,
                        in ACString origin);
 };
 

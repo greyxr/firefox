@@ -2600,7 +2600,6 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
 NS_IMETHODIMP
 nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
                              const nsACString& aActualCredential,
-                             const nsTArray<nsCString>& aMethods,
                              const nsACString& aOrigin) {
   printf("[nsHttpHandler] AddCredential: bcID=%" PRIu64 " nonce=%s origin=%s\n",
          aBcID, PromiseFlatCString(aNonce).get(),
@@ -2608,7 +2607,6 @@ nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
   Credential cred;
   cred.nonce = aNonce;
   cred.actualCredential = aActualCredential;
-  cred.methods = aMethods.Clone();
   cred.origin = aOrigin;
   mCredMap.InsertOrUpdate(aBcID, std::move(cred));
   printf("[nsHttpHandler] AddCredential: map size after insert=%u\n", mCredMap.Count());
@@ -3155,7 +3153,6 @@ Credential nsHttpHandler::GetCredential(uint64_t aBcID,
     Credential copy;
     copy.nonce = data.nonce;
     copy.actualCredential = data.actualCredential;
-    copy.methods = data.methods.Clone();
     copy.origin = data.origin;
     return copy;
   }
@@ -3207,19 +3204,6 @@ nsresult nsHttpHandler::ReplaceNonce(HttpBaseChannel* chan,
     printf("[nsHttpHandler] ReplaceNonce: origin mismatch (%s vs %s), skipping\n",
            cred.origin.get(), requestOrigin.get());
     return NS_OK;
-  }
-
-  if (!cred.methods.IsEmpty()) {
-    nsAutoCString method;
-    nsresult rv = chan->GetRequestMethod(method);
-    if (NS_FAILED(rv)) {
-      return rv;
-    }
-    printf("[nsHttpHandler] ReplaceNonce: request method=%s\n", method.get());
-    if (!cred.methods.Contains(method)) {
-      printf("[nsHttpHandler] ReplaceNonce: method not in policy, skipping\n");
-      return NS_OK;
-    }
   }
 
   nsCOMPtr<nsIInputStream> stream;

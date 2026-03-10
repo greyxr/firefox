@@ -196,7 +196,6 @@ class NeckoParent : public PNeckoParent {
   mozilla::ipc::IPCResult RecvAddCredential(const uint64_t& bcID,
                                              const nsCString& nonce,
                                              const nsCString& actualCredential,
-                                             nsTArray<nsCString>&& methods,
                                              const nsCString& origin);
 
   /* WebExtensions */

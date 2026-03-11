@@ -2601,13 +2601,35 @@ NS_IMETHODIMP
 nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
                              const nsACString& aActualCredential,
                              const nsACString& aOrigin) {
+  
+  nsCOMPtr<nsIURI> uri;
+  nsresult rv = NS_NewURI(getter_AddRefs(uri), aOrigin);
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+  nsAutoCString scheme;
+  nsAutoCString host;
+  int32_t port = -1;
+  uri->GetScheme(scheme);
+  uri->GetAsciiHost(host);
+  uri->GetPort(&port);
+  nsAutoCString origin;
+  origin.Assign(scheme);
+  origin.AppendLiteral("://");
+  origin.Append(host);
+  if (port != -1) {
+    origin.Append(':');
+    origin.AppendInt(port);
+  }
+
   printf("[nsHttpHandler] AddCredential: bcID=%" PRIu64 " nonce=%s origin=%s\n",
-         aBcID, PromiseFlatCString(aNonce).get(),
-         PromiseFlatCString(aOrigin).get());
+        aBcID, PromiseFlatCString(aNonce).get(),
+        PromiseFlatCString(origin).get());
+
   Credential cred;
   cred.nonce = aNonce;
   cred.actualCredential = aActualCredential;
-  cred.origin = aOrigin;
+  cred.origin = origin;
   mCredMap.InsertOrUpdate(aBcID, std::move(cred));
   printf("[nsHttpHandler] AddCredential: map size after insert=%u\n", mCredMap.Count());
   return NS_OK;

@@ -483,7 +483,11 @@
           },
           {
             "type": "integer",
-            "name": "browsingContextID"
+            "name": "tabId"
+          },
+          {
+            "type": "integer",
+            "name": "frameId"
           },
           {
             "type": "string",

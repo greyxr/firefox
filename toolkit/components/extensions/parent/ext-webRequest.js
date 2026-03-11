@@ -11,7 +11,7 @@ ChromeUtils.defineESModuleGetters(this, {
 const config = Cc["@mozilla.org/network/protocol;1?name=http"]
   .getService(Ci.nsIWebRequestConfig);
 
-var { parseMatchPatterns, DefaultMap } = ExtensionUtils;
+var { ExtensionError, parseMatchPatterns, DefaultMap } = ExtensionUtils;
 
 const MAX_HANDLER_BEHAVIOR_CHANGED_CALLS_PER_10_MINUTES = 20;
 const TIME_10_MINUTES_IN_MS = 10 * 60 * 1000;
@@ -246,11 +246,21 @@ this.webRequest = class extends ExtensionAPIPersistent {
 
           ChromeUtils.clearResourceCache({ target: "content" });
         },
-        handleCredentialReplacement: async (nonce, actualCredential, browsingContextID, origin) => {
-          console.log("Received credentials: ", actualCredential);
-          console.log("Calling network method...");
-          config.AddCredential(Number(browsingContextID), nonce, actualCredential, origin);
-          console.log("After AddCredentials");
+        handleCredentialReplacement: async (nonce, actualCredential, tabId, frameId, origin) => {
+          const { tabManager } = context.extension;
+          const tab = tabManager.get(tabId);
+          if (!tab) {
+            throw new ExtensionError(`No tab found with tabId: ${tabId}`);
+          }
+          const topBC = tab.browsingContext;
+          if (!topBC) {
+            throw new ExtensionError(`No browsing context for tab: ${tabId}`);
+          }
+          const bc = BrowsingContext.get(frameId || topBC.id);
+          if (!bc || bc.top !== topBC) {
+            throw new ExtensionError(`Invalid frameId ${frameId} for tab ${tabId}`);
+          }
+          config.AddCredential(bc.id, nonce, actualCredential, origin);
           return nonce;
         },
       },

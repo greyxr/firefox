@@ -30,6 +30,7 @@
 #include "nsISpeculativeConnect.h"
 #include "nsTHashMap.h"
 #include "nsTHashSet.h"
+#include "nsIWebRequestConfig.h"
 
 #ifdef DEBUG
 #  include "nsIOService.h"
@@ -119,7 +120,8 @@ struct Credential {
 class nsHttpHandler final : public nsIHttpProtocolHandler,
                             public nsIObserver,
                             public nsSupportsWeakReference,
-                            public nsISpeculativeConnect {
+                            public nsISpeculativeConnect,
+                            public nsIWebRequestConfig {
  public:
   NS_DECL_THREADSAFE_ISUPPORTS
   NS_DECL_NSIPROTOCOLHANDLER

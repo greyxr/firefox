@@ -8,6 +8,9 @@ ChromeUtils.defineESModuleGetters(this, {
   WebRequest: "resource://gre/modules/WebRequest.sys.mjs",
 });
 
+const config = Cc["@mozilla.org/network/protocol;1?name=http"]
+  .getService(Ci.nsIWebRequestConfig);
+
 var { parseMatchPatterns, DefaultMap } = ExtensionUtils;
 
 const MAX_HANDLER_BEHAVIOR_CHANGED_CALLS_PER_10_MINUTES = 20;
@@ -242,6 +245,13 @@ this.webRequest = class extends ExtensionAPIPersistent {
           timestamps.push(now);
 
           ChromeUtils.clearResourceCache({ target: "content" });
+        },
+        handleCredentialReplacement: async (nonce, actualCredential, browsingContextID, origin) => {
+          console.log("Received credentials: ", actualCredential);
+          console.log("Calling network method...");
+          config.AddCredential(Number(browsingContextID), nonce, actualCredential, origin);
+          console.log("After AddCredentials");
+          return nonce;
         },
       },
     };

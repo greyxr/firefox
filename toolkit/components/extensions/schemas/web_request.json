@@ -468,6 +468,33 @@
         }
       },
       {
+        "name": "handleCredentialReplacement",
+        "type": "function",
+        "description": "test endpoint",
+        "async": true,
+        "parameters": [
+          {
+            "type": "string",
+            "name": "nonce"
+          },
+          {
+            "type": "string",
+            "name": "actualCredential"
+          },
+          {
+            "type": "integer",
+            "name": "browsingContextID"
+          },
+          {
+            "type": "string",
+            "name": "origin"
+          }
+        ],
+        "returns": {
+          "type": "string"
+        }
+      },
+      {
         "name": "getSecurityInfo",
         "type": "function",
         "async": true,

@@ -252,13 +252,10 @@ this.webRequest = class extends ExtensionAPIPersistent {
           if (!tab) {
             throw new ExtensionError(`No tab found with tabId: ${tabId}`);
           }
-          const topBC = tab.browsingContext;
-          if (!topBC) {
-            throw new ExtensionError(`No browsing context for tab: ${tabId}`);
-          }
-          const bc = BrowsingContext.get(frameId || topBC.id);
-          if (!bc || bc.top !== topBC) {
-            throw new ExtensionError(`Invalid frameId ${frameId} for tab ${tabId}`);
+ 
+          const bc = tab.browsingContext;
+          if (!bc) {
+            throw new ExtensionError(`Invalid Browsing Context fetched from page`);
           }
           config.AddCredential(bc.id, nonce, actualCredential, origin);
           return nonce;

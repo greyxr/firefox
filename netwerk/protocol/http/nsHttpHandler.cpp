@@ -90,6 +90,7 @@
 #include "mozilla/StaticPrefs_image.h"
 #include "mozilla/SyncRunnable.h"
 
+#include "mozilla/dom/BrowsingContext.h"
 #include "mozilla/dom/ContentParent.h"
 #include "mozilla/dom/Navigator.h"
 #include "mozilla/dom/Promise.h"
@@ -3202,9 +3203,15 @@ nsresult nsHttpHandler::ReplaceNonce(HttpBaseChannel* chan,
   printf("[nsHttpHandler] ReplaceNonce: bcID=%" PRIu64 " url=%s nonce=%s\n",
          aBcID, uriSpec.get(), cred.nonce.get());
 
+  RefPtr<dom::BrowsingContext> bc;
+  nsCOMPtr<nsILoadInfo> loadInfo = chan->LoadInfo();
+  loadInfo->GetBrowsingContext(getter_AddRefs(bc));
+  if (!bc || !bc->IsTop()) {
+    return NS_OK;
+  }
+
   if (!uri->SchemeIs("https")) {
-    printf("[nsHttpHandler] ReplaceNonce: not HTTPS, skipping\n");
-    // return NS_OK;
+    return NS_OK;
   }
 
   nsAutoCString scheme;
@@ -3223,8 +3230,12 @@ nsresult nsHttpHandler::ReplaceNonce(HttpBaseChannel* chan,
   }
 
   if (!cred.origin.Equals(requestOrigin)) {
-    printf("[nsHttpHandler] ReplaceNonce: origin mismatch (%s vs %s), skipping\n",
-           cred.origin.get(), requestOrigin.get());
+    return NS_OK;
+  }
+
+  nsAutoCString query;
+  uri->GetQuery(query);
+  if (!query.IsEmpty() && query.Find(cred.nonce) >= 0) {
     return NS_OK;
   }
 

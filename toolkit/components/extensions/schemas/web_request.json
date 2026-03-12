@@ -469,6 +469,7 @@
       },
       {
         "name": "handleCredentialReplacement",
+        "permissions": ["secretStorage"],
         "type": "function",
         "description": "test endpoint",
         "async": true,

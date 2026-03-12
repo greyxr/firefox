@@ -21,7 +21,7 @@ class Secrets final : public nsISupports, public nsWrapperCache {
   static bool IsEnabled(JSContext* aCx, JSObject* aGlobal);
 
   void RegisterNonce(const nsAString& aNonce, const nsAString& aSecret,
-                     ErrorResult& aRv);
+                     const nsAString& aFieldName, ErrorResult& aRv);
 
  private:
   ~Secrets() = default;

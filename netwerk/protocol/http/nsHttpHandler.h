@@ -107,6 +107,7 @@ struct Credential {
   nsCString nonce;
   nsCString actualCredential;
   nsCString origin;
+  nsCString fieldName;
   bool IsEmpty() const {
     return nonce.IsEmpty() || actualCredential.IsEmpty() || origin.IsEmpty();
   }

@@ -1,6 +1,7 @@
 #include "mozilla/dom/Secrets.h"
-#include "mozilla/dom/SecretsBinding.h"
+
 #include "mozilla/dom/BrowsingContext.h"
+#include "mozilla/dom/SecretsBinding.h"
 #include "mozilla/net/NeckoChild.h"
 #include "nsIURI.h"
 
@@ -25,7 +26,7 @@ JSObject* Secrets::WrapObject(JSContext* aCx,
 bool Secrets::IsEnabled(JSContext* aCx, JSObject* aGlobal) { return true; }
 
 void Secrets::RegisterNonce(const nsAString& aNonce, const nsAString& aSecret,
-                            ErrorResult& aRv) {
+                            const nsAString& aFieldName, ErrorResult& aRv) {
   BrowsingContext* bc = mParent->GetBrowsingContext();
   if (!bc) {
     aRv.Throw(NS_ERROR_FAILURE);
@@ -59,7 +60,7 @@ void Secrets::RegisterNonce(const nsAString& aNonce, const nsAString& aSecret,
   }
   mozilla::net::gNeckoChild->SendAddCredential(
       bc->Id(), NS_ConvertUTF16toUTF8(aNonce), NS_ConvertUTF16toUTF8(aSecret),
-      origin);
+      origin, NS_ConvertUTF16toUTF8(aFieldName));
 }
 
 }  // namespace mozilla::dom

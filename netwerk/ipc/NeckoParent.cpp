@@ -663,10 +663,11 @@ mozilla::ipc::IPCResult NeckoParent::RecvRemoveRequestContext(
 
 mozilla::ipc::IPCResult NeckoParent::RecvAddCredential(
     const uint64_t& bcID, const nsCString& nonce,
-    const nsCString& actualCredential,
-    const nsCString& origin) {
+    const nsCString& actualCredential, const nsCString& origin,
+    const nsCString& fieldName) {
   if (gHttpHandler) {
-    gHttpHandler->AddCredential(bcID, nonce, actualCredential, origin);
+    gHttpHandler->AddCredential(bcID, nonce, actualCredential, origin,
+                                fieldName);
   }
   return IPC_OK();
 }

@@ -194,9 +194,10 @@ class NeckoParent : public PNeckoParent {
       const uint64_t& rcid);
   mozilla::ipc::IPCResult RecvRemoveRequestContext(const uint64_t& rcid);
   mozilla::ipc::IPCResult RecvAddCredential(const uint64_t& bcID,
-                                             const nsCString& nonce,
-                                             const nsCString& actualCredential,
-                                             const nsCString& origin);
+                                            const nsCString& nonce,
+                                            const nsCString& actualCredential,
+                                            const nsCString& origin,
+                                            const nsCString& fieldName);
 
   /* WebExtensions */
   mozilla::ipc::IPCResult RecvGetExtensionStream(

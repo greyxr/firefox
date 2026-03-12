@@ -30,6 +30,7 @@
 #include "nsPrintfCString.h"
 #include "nsCOMPtr.h"
 #include "nsNetCID.h"
+#include "mozilla/dom/BrowsingContext.h"
 #include "mozilla/AppShutdown.h"
 #include "mozilla/Base64.h"
 #include "mozilla/ClearOnShutdown.h"
@@ -2600,7 +2601,8 @@ nsHttpHandler::SpeculativeConnect(nsIURI* aURI, nsIPrincipal* aPrincipal,
 NS_IMETHODIMP
 nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
                              const nsACString& aActualCredential,
-                             const nsACString& aOrigin) {
+                             const nsACString& aOrigin,
+                             const nsACString& aFieldName) {
   printf("[nsHttpHandler] AddCredential: bcID=%" PRIu64 " nonce=%s origin=%s\n",
          aBcID, PromiseFlatCString(aNonce).get(),
          PromiseFlatCString(aOrigin).get());
@@ -2608,8 +2610,10 @@ nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
   cred.nonce = aNonce;
   cred.actualCredential = aActualCredential;
   cred.origin = aOrigin;
+  cred.fieldName = aFieldName;
   mCredMap.InsertOrUpdate(aBcID, std::move(cred));
-  printf("[nsHttpHandler] AddCredential: map size after insert=%u\n", mCredMap.Count());
+  printf("[nsHttpHandler] AddCredential: map size after insert=%u\n",
+         mCredMap.Count());
   return NS_OK;
 }
 
@@ -3144,16 +3148,18 @@ void nsHttpHandler::ObserveHttpActivityWithArgs(
 }
 
 Credential nsHttpHandler::GetCredential(uint64_t aBcID,
-                                         const nsACString& aUrl) {
+                                        const nsACString& aUrl) {
   auto entry = mCredMap.Lookup(aBcID);
   if (entry) {
     const Credential& data = entry.Data();
-    printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " url=%s found nonce=%s\n",
+    printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64
+           " url=%s found nonce=%s\n",
            aBcID, PromiseFlatCString(aUrl).get(), data.nonce.get());
     Credential copy;
     copy.nonce = data.nonce;
     copy.actualCredential = data.actualCredential;
     copy.origin = data.origin;
+    copy.fieldName = data.fieldName;
     return copy;
   }
   printf("[nsHttpHandler] GetCredential: bcID=%" PRIu64 " url=%s not found\n",
@@ -3162,7 +3168,8 @@ Credential nsHttpHandler::GetCredential(uint64_t aBcID,
 }
 
 void nsHttpHandler::RemoveCredential(uint64_t aBcID) {
-  printf("[nsHttpHandler] RemoveCredential: bcID=%" PRIu64 " map size before=%u\n",
+  printf("[nsHttpHandler] RemoveCredential: bcID=%" PRIu64
+         " map size before=%u\n",
          aBcID, mCredMap.Count());
   mCredMap.Remove(aBcID);
 }
@@ -3175,16 +3182,23 @@ nsresult nsHttpHandler::ReplaceNonce(HttpBaseChannel* chan,
     return NS_ERROR_FAILURE;
   }
 
-  nsAutoCString uriSpec;
-  uri->GetSpec(uriSpec);
-  printf("[nsHttpHandler] ReplaceNonce: bcID=%" PRIu64 " url=%s nonce=%s\n",
-         aBcID, uriSpec.get(), cred.nonce.get());
-
-  if (!uri->SchemeIs("https")) {
-    printf("[nsHttpHandler] ReplaceNonce: not HTTPS, skipping\n");
-    // return NS_OK;
+  // Safety check 1: reject requests from iframes.
+  nsCOMPtr<nsILoadInfo> loadInfo;
+  chan->GetLoadInfo(getter_AddRefs(loadInfo));
+  if (loadInfo) {
+    RefPtr<dom::BrowsingContext> bc;
+    loadInfo->GetBrowsingContext(getter_AddRefs(bc));
+    if (!bc || !bc->IsTop()) {
+      return NS_OK;
+    }
   }
 
+  // Safety check 2: require HTTPS.
+  if (!uri->SchemeIs("https")) {
+    return NS_OK;
+  }
+
+  // Safety check 3: origin must match.
   nsAutoCString scheme;
   nsAutoCString host;
   int32_t port = -1;
@@ -3201,14 +3215,21 @@ nsresult nsHttpHandler::ReplaceNonce(HttpBaseChannel* chan,
   }
 
   if (!cred.origin.Equals(requestOrigin)) {
-    printf("[nsHttpHandler] ReplaceNonce: origin mismatch (%s vs %s), skipping\n",
-           cred.origin.get(), requestOrigin.get());
     return NS_OK;
+  }
+
+  // Safety check 4: nonce must not appear in GET parameters.
+  nsAutoCString queryString;
+  rv = uri->GetQuery(queryString);
+  if (NS_SUCCEEDED(rv) && !queryString.IsEmpty()) {
+    if (queryString.Find(cred.nonce) >= 0) {
+      RemoveCredential(aBcID);
+      return NS_OK;
+    }
   }
 
   nsCOMPtr<nsIInputStream> stream;
   if (NS_FAILED(chan->GetUploadStream(getter_AddRefs(stream))) || !stream) {
-    printf("[nsHttpHandler] ReplaceNonce: no upload stream, skipping\n");
     return NS_OK;
   }
 
@@ -3218,17 +3239,44 @@ nsresult nsHttpHandler::ReplaceNonce(HttpBaseChannel* chan,
     return rv;
   }
 
-  if (body.Find(cred.nonce) < 0) {
-    printf("[nsHttpHandler] ReplaceNonce: nonce not found in body\n");
+  int32_t noncePos = body.Find(cred.nonce);
+  if (noncePos < 0) {
     return NS_OK;
   }
 
-  printf("[nsHttpHandler] ReplaceNonce: nonce found in body, replacing\n");
-  body.ReplaceSubstring(cred.nonce, cred.actualCredential);
+  // Safety check 5: field name must match the registered field name.
+  // In URL-encoded form data the format is: fieldName=value&...
+  // Walk backwards from the nonce to find the field name.
+  int32_t eqPos = body.RFindChar('=', noncePos - 1);
+  if (eqPos < 0 || eqPos + 1 != noncePos) {
+    return NS_OK;
+  }
+  int32_t fieldStart = body.RFindChar('&', eqPos - 1);
+  fieldStart = (fieldStart < 0) ? 0 : fieldStart + 1;
+  nsAutoCString submittedFieldName;
+  body.Mid(submittedFieldName, fieldStart, eqPos - fieldStart);
+
+  if (!cred.fieldName.IsEmpty() && !submittedFieldName.Equals(cred.fieldName)) {
+    return NS_OK;
+  }
+
+  // Build the exact key=value pair to replace, avoiding blind substring match.
+  nsAutoCString oldEntry;
+  oldEntry.Assign(submittedFieldName);
+  oldEntry.Append('=');
+  oldEntry.Append(cred.nonce);
+
+  nsAutoCString newEntry;
+  newEntry.Assign(submittedFieldName);
+  newEntry.Append('=');
+  newEntry.Append(cred.actualCredential);
+
+  body.ReplaceSubstring(oldEntry, newEntry);
   RemoveCredential(aBcID);
 
   nsCOMPtr<nsIInputStream> newStream;
-  rv = NS_NewByteInputStream(getter_AddRefs(newStream), body, NS_ASSIGNMENT_COPY);
+  rv = NS_NewByteInputStream(getter_AddRefs(newStream), body,
+                             NS_ASSIGNMENT_COPY);
   if (NS_FAILED(rv)) {
     return rv;
   }

@@ -5,6 +5,7 @@
 "use strict";
 
 ChromeUtils.defineESModuleGetters(this, {
+  WebNavigationFrames: "resource://gre/modules/WebNavigationFrames.sys.mjs",
   WebRequest: "resource://gre/modules/WebRequest.sys.mjs",
 });
 
@@ -247,17 +248,26 @@ this.webRequest = class extends ExtensionAPIPersistent {
           ChromeUtils.clearResourceCache({ target: "content" });
         },
         handleCredentialReplacement: async (nonce, actualCredential, tabId, frameId, origin) => {
+          console.log("Inside handleCredentialReplacement")
           const { tabManager } = context.extension;
           const tab = tabManager.get(tabId);
+          console.log("Tab:", tab)
           if (!tab) {
             throw new ExtensionError(`No tab found with tabId: ${tabId}`);
           }
- 
-          const bc = tab.browsingContext;
-          if (!bc) {
-            throw new ExtensionError(`Invalid Browsing Context fetched from page`);
+          const topBC = tab.browsingContext;
+          console.log("Top BC:", topBC)
+          if (!topBC) {
+            throw new ExtensionError(`No browsing context for tab: ${tabId}`);
           }
-          config.AddCredential(bc.id, nonce, actualCredential, origin);
+          const frame = WebNavigationFrames.getFrame(topBC, frameId);
+          console.log("Frame:", frame)
+          if (!frame) {
+            throw new ExtensionError(`Invalid frameId ${frameId} for tab ${tabId}`);
+          }
+          const bcId = frameId || topBC.id;
+          console.log("bcId:", bcId)
+          config.AddCredential(bcId, nonce, actualCredential, origin);
           return nonce;
         },
       },

@@ -30,7 +30,7 @@
 #include "nsISpeculativeConnect.h"
 #include "nsTHashMap.h"
 #include "nsTHashSet.h"
-#include "nsIWebRequestConfig.h"
+#include "nsiWebRequestCredential.h"
 
 #ifdef DEBUG
 #  include "nsIOService.h"
@@ -121,7 +121,7 @@ class nsHttpHandler final : public nsIHttpProtocolHandler,
                             public nsIObserver,
                             public nsSupportsWeakReference,
                             public nsISpeculativeConnect,
-                            public nsIWebRequestConfig {
+                            public nsiWebRequestCredential {
  public:
   NS_DECL_THREADSAFE_ISUPPORTS
   NS_DECL_NSIPROTOCOLHANDLER

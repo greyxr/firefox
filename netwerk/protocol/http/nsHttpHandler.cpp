@@ -2147,7 +2147,7 @@ nsresult nsHttpHandler::SetAcceptEncodings(const char* aAcceptEncodings,
 
 NS_IMPL_ISUPPORTS(nsHttpHandler, nsIHttpProtocolHandler,
                   nsIProxiedProtocolHandler, nsIProtocolHandler, nsIObserver,
-                  nsISupportsWeakReference, nsISpeculativeConnect, nsIWebRequestConfig)
+                  nsISupportsWeakReference, nsISpeculativeConnect, nsiWebRequestCredential)
 
 //-----------------------------------------------------------------------------
 // nsHttpHandler::nsIProtocolHandler

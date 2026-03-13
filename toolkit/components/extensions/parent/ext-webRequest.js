@@ -10,7 +10,7 @@ ChromeUtils.defineESModuleGetters(this, {
 });
 
 const config = Cc["@mozilla.org/network/protocol;1?name=http"]
-  .getService(Ci.nsIWebRequestConfig);
+  .getService(Ci.nsiWebRequestCredential);
 
 var { ExtensionError, parseMatchPatterns, DefaultMap } = ExtensionUtils;
 

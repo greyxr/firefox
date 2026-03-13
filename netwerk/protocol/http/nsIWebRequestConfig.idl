@@ -4,10 +4,7 @@
 interface nsiWebRequestCredential : nsISupports
 {
   /**
-   * Set debug/config information that nsHttpHandler will consult when
-   * creating new HTTP channels.
-   *
-   * This is process-global state owned by nsHttpHandler.
+   * Pass credentials from the WebRequest API to the network stack
    */
   void AddCredential(in unsigned long long browsingContextID, in ACString nonce, in ACString actualCredential, in ACString origin);
 };

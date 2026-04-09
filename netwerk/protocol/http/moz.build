@@ -31,7 +31,7 @@ XPIDL_SOURCES += [
     "nsIRaceCacheWithNetwork.idl",
     "nsIReplacedHttpResponse.idl",
     "nsITlsHandshakeListener.idl",
-    "nsiWebRequestCredential.idl",
+    "nsIWebRequestCredential.idl",
     "nsIWellKnownOpportunisticUtils.idl",
 ]
 

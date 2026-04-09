@@ -30,6 +30,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ChromeMigrationUtils: "resource:///modules/ChromeMigrationUtils.sys.mjs",
   FirefoxRelay: "resource://gre/modules/FirefoxRelay.sys.mjs",
   LoginHelper: "resource://gre/modules/LoginHelper.sys.mjs",
+  Logic: "resource://gre/modules/LoginManager.shared.sys.mjs",
   MigrationUtils: "resource:///modules/MigrationUtils.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   WebAuthnFeature: "resource://gre/modules/WebAuthnFeature.sys.mjs",
@@ -354,6 +355,36 @@ export class LoginManagerParent extends JSWindowActorParent {
       // to the top-level browsing context.
       case "PasswordManager:formProcessed": {
         this.#onFormProcessed(data.formid, data.autofillResult);
+        break;
+      }
+
+      case "PasswordManager:addCredential": {
+        lazy.log(`[NonceDefense] Parent: Received addCredential message`);
+        const bc = this.manager.browsingContext;
+        lazy.log(`[NonceDefense] Parent: bc=${bc}, isTop=${bc?.isTop}`);
+        //if (bc && bc.isTop) {
+          // Get origin from browsing context for security
+          let origin = bc.currentURI?.asciiSpec;
+          lazy.log(`[NonceDefense] Parent: currentURI asciiSpec=${origin}`);
+          if (origin) {
+            origin = lazy.Logic.getLoginOrigin(origin);
+          }
+          lazy.log(`[NonceDefense] Parent: computed origin=${origin}`);
+          if (origin && origin.startsWith("https://")) {
+            try {
+              lazy.log(`[NonceDefense] Parent: About to call AddCredential with bcId=${bc.id}, nonce="${data.nonce}", origin=${origin}`);
+              const config = Cc["@mozilla.org/network/protocol;1?name=http"].getService(Ci.nsIWebRequestCredential);
+              config.AddCredential(bc.id, data.nonce, data.password, origin);
+              lazy.log(`[NonceDefense] Parent: Successfully called AddCredential`);
+            } catch (e) {
+              lazy.log(`[NonceDefense] Parent: Error calling AddCredential: ${e}`);
+            }
+          } else {
+            lazy.log(`[NonceDefense] Parent: Ignoring credential for non-HTTPS origin: ${origin}`);
+          }
+        // } else {
+        //   lazy.log(`[NonceDefense] Parent: Ignoring credential for non-top-level context`);
+        // }
         break;
       }
     }

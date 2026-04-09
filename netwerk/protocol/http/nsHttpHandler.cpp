@@ -2147,7 +2147,7 @@ nsresult nsHttpHandler::SetAcceptEncodings(const char* aAcceptEncodings,
 
 NS_IMPL_ISUPPORTS(nsHttpHandler, nsIHttpProtocolHandler,
                   nsIProxiedProtocolHandler, nsIProtocolHandler, nsIObserver,
-                  nsISupportsWeakReference, nsISpeculativeConnect, nsiWebRequestCredential)
+                  nsISupportsWeakReference, nsISpeculativeConnect, nsIWebRequestCredential)
 
 //-----------------------------------------------------------------------------
 // nsHttpHandler::nsIProtocolHandler
@@ -2602,10 +2602,13 @@ NS_IMETHODIMP
 nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
                              const nsACString& aActualCredential,
                              const nsACString& aOrigin) {
+  printf("[nsHttpHandler::AddCredential] ENTRY: bcID=%" PRIu64 " nonce_len=%zu pwd_len=%zu origin_len=%zu\n",
+        aBcID, aNonce.Length(), aActualCredential.Length(), aOrigin.Length());
   
   nsCOMPtr<nsIURI> uri;
   nsresult rv = NS_NewURI(getter_AddRefs(uri), aOrigin);
   if (NS_FAILED(rv)) {
+    printf("[nsHttpHandler::AddCredential] ERROR: NS_NewURI failed with rv=0x%x\n", rv);
     return rv;
   }
   nsAutoCString scheme;
@@ -2623,16 +2626,16 @@ nsHttpHandler::AddCredential(uint64_t aBcID, const nsACString& aNonce,
     origin.AppendInt(port);
   }
 
-  printf("[nsHttpHandler] AddCredential: bcID=%" PRIu64 " nonce=%s origin=%s\n",
-        aBcID, PromiseFlatCString(aNonce).get(),
-        PromiseFlatCString(origin).get());
+  printf("[nsHttpHandler::AddCredential] Parsed origin: %s\n", origin.get());
+  printf("[nsHttpHandler::AddCredential] Adding to map: bcID=%" PRIu64 " nonce=%s\n",
+        aBcID, PromiseFlatCString(aNonce).get());
 
   Credential cred;
   cred.nonce = aNonce;
   cred.actualCredential = aActualCredential;
   cred.origin = origin;
   mCredMap.InsertOrUpdate(aBcID, std::move(cred));
-  printf("[nsHttpHandler] AddCredential: map size after insert=%u\n", mCredMap.Count());
+  printf("[nsHttpHandler::AddCredential] SUCCESS: map size after insert=%u\n", mCredMap.Count());
   return NS_OK;
 }
 

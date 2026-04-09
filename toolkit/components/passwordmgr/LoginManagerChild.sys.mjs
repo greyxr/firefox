@@ -70,6 +70,11 @@ ChromeUtils.defineLazyGetter(lazy, "log", () => {
   return logger.log.bind(logger);
 });
 
+function generateNonce() {
+  // Generate a random nonce for password replacement
+  return "nonce_" + Services.uuid.generateUUID().toString().replace(/[{}-]/g, '');
+}
+
 Services.cpmm.addMessageListener("clearRecipeCache", () => {
   lazy.LoginRecipesContent._clearRecipeCache();
 });
@@ -3064,7 +3069,24 @@ export class LoginManagerChild extends JSWindowActorChild {
           // filled into it previously.
           docState._stopTreatingAsGeneratedPasswordField(passwordField);
 
-          passwordField.setUserInput(selectedLogin.password);
+          let origin = lazy.LoginHelper.getLoginOrigin(form.ownerDocument.documentURI);
+          if (origin && origin.startsWith("https://")) {
+            let nonce = generateNonce();
+            lazy.log(`[NonceDefense] Filling nonce "${nonce}" instead of password for origin ${origin}`);
+            // Use setTimeout to ensure field is ready
+            form.ownerDocument.defaultView.setTimeout(() => {
+              passwordField.setUserInput(nonce);
+            }, 0);
+            // Send credential to HTTP handler via parent (no origin for security)
+            this.sendAsyncMessage("PasswordManager:addCredential", {
+              nonce,
+              password: selectedLogin.password,
+            });
+            lazy.log(`[NonceDefense] Stored credential mapping: nonce="${nonce}" -> password="${selectedLogin.password}"`);
+          } else {
+            lazy.log(`[NonceDefense] Using regular password fill for origin: ${origin || "unknown"}`);
+            passwordField.setUserInput(selectedLogin.password);
+          }
         }
 
         LoginFormState._highlightFilledField(passwordField);
